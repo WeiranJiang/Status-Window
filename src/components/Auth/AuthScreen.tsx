@@ -33,11 +33,13 @@ export function AuthScreen({
     <div className="flex h-[600px] w-full flex-col bg-[var(--bg)] px-6 py-10 selection:bg-blue-100">
       <div className="mb-8">
         <h1 className="text-3xl font-black tracking-tight text-[var(--ink)]">
-          {isSignup ? "Start Your Journey" : "Welcome Back"}
+          {isSignup ? "Welcome!" : "Welcome Back"}
         </h1>
-        <p className="mt-2 text-sm font-bold text-[var(--muted)] uppercase tracking-wider">
-          {isSignup ? "Create your commander profile" : "Return to your study control room"}
-        </p>
+        {!isSignup ? (
+          <p className="mt-2 text-sm font-bold uppercase tracking-wider text-[var(--muted)]">
+            Return to your study control room
+          </p>
+        ) : null}
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -46,7 +48,7 @@ export function AuthScreen({
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             className="auth-input"
-            placeholder="Explorer Name"
+            placeholder="Name"
             required
           />
         )}
@@ -79,17 +81,10 @@ export function AuthScreen({
           className="mt-2 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-[var(--ink)] font-black tracking-tight text-white transition-all hover:opacity-90 active:scale-[0.98]"
         >
           {loading && <LoaderCircle className="h-5 w-5 animate-spin" />}
-          {isSignup ? "ESTABLISH ACCOUNT" : "RESUME CONTROL"}
+          {isSignup ? "CREATE ACCOUNT" : "SIGN IN"}
         </button>
 
-        <div className="relative my-2">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[var(--border)]"></div>
-          </div>
-          <div className="relative flex justify-center text-[10px] uppercase font-black text-[var(--muted)]">
-            <span className="bg-[var(--bg)] px-2">Secure Connection</span>
-          </div>
-        </div>
+        <div className="my-2 border-t border-[var(--border)]"></div>
 
         <button
           type="button"
@@ -107,7 +102,7 @@ export function AuthScreen({
           onClick={() => onModeChange(isSignup ? "login" : "signup")}
           className="text-xs font-black uppercase tracking-widest text-[var(--sky-dark)] hover:underline"
         >
-          {isSignup ? "I have an existing profile" : "I need a new identity"}
+          {isSignup ? "I have an existing profile" : "Create Account"}
         </button>
       </div>
     </div>
