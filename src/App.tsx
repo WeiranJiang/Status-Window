@@ -253,7 +253,7 @@ export default function App() {
             setRadarSubjectIds((current) =>
               current.length > 0
                 ? current.filter((subjectId) => nextCoreData.subjects.some((subject) => subject.id === subjectId && subject.is_active))
-                : nextCoreData.subjects.filter((subject) => subject.is_active).slice(0, 4).map((subject) => subject.id),
+                : nextCoreData.subjects.filter((subject) => subject.is_active).slice(0, 3).map((subject) => subject.id),
             );
           });
 
@@ -880,6 +880,7 @@ export default function App() {
               subjects={subjects}
               sessions={sessions}
               radarSubjectIds={radarSubjectIds}
+              onChangeRadarIds={setRadarSubjectIds}
             />
           </Suspense>
         ) : null}
