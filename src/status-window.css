@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito:wght@400;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f9f8f6;
+  --paper: #ffffff;
+  --ink: #1a1512;
+  --ink-soft: #4d443d;
+  --sky-soft: #f0f7ff;
+  --sky: #3b82f6;
+  --sky-dark: #1d4ed8;
+  --leaf: #10b981;
+  --muted: #a39689;
+  --danger: #ef4444;
+  --border: #e8e3dc;
+  --radius: 16px;
+  --font: 'Nunito', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.sw-input-focus {
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all;
+}
+
+/* Animations */
+.animate-in {
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.status-window-popup {
+  width: 420px;
+  height: 600px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Auth Screens */
+.auth-input {
+  @apply w-full rounded-2xl border border-[var(--border)] bg-gray-50/50 px-5 py-4 text-sm font-bold text-[var(--ink)] transition-all focus:bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none;
+}

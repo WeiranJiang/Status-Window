@@ -1,61 +1,108 @@
-import { ChartNoAxesCombined, Cog, NotebookPen } from "lucide-react";
+import { BarChart3, Info, Settings as SettingsIcon, Timer, Users } from "lucide-react";
 import type { AppTab } from "../../types";
-
-const tabs: Array<{ id: AppTab; label: string; icon: typeof NotebookPen }> = [
-  { id: "log", label: "Log", icon: NotebookPen },
-  { id: "stats", label: "Stats", icon: ChartNoAxesCombined },
-  { id: "settings", label: "Settings", icon: Cog },
-];
 
 export function AppShell({
   activeTab,
-  displayName,
   onTabChange,
+  displayName,
+  hp,
+  level,
   children,
 }: {
   activeTab: AppTab;
-  displayName: string;
   onTabChange: (tab: AppTab) => void;
+  displayName: string;
+  hp: number;
+  level: number;
   children: React.ReactNode;
 }) {
   return (
-    <div className="status-window-shell relative overflow-hidden rounded-[28px] border border-white/60 bg-white/80 shadow-soft backdrop-blur-xl">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.9),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(255,255,255,0.65),_transparent_30%)]" />
-      <div className="relative grid h-full min-h-[600px] grid-cols-[108px_1fr] max-[460px]:grid-cols-1">
-        <aside className="border-r border-white/60 bg-white/55 px-4 py-5 max-[460px]:border-r-0 max-[460px]:border-b">
-          <div className="rounded-3xl bg-[rgba(255,255,255,0.7)] p-3 shadow-card">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Status Window</p>
-            <h1 className="mt-2 font-display text-xl font-bold text-slate-800">Cozy focus log</h1>
-            <div className="mt-4 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-xs text-slate-500">
-              <div className="font-semibold text-slate-700">{displayName}</div>
-              <div className="mt-1">Ready to add another session.</div>
-            </div>
+    <div className="relative flex h-[600px] w-[420px] flex-col overflow-hidden bg-[var(--bg)] font-sans selection:bg-[var(--sky-soft)]">
+      {/* MINIMAL TOP BAR */}
+      <header className="shrink-0 px-6 pt-4 pb-5">
+        <div className="text-center">
+          <span className="text-[14px] font-black uppercase tracking-[0.18em] text-[var(--muted)]">Status</span>
+        </div>
+
+        <div className="mt-4 flex items-start justify-between">
+          <div className="flex flex-col">
+            <h1 className="text-lg font-black tracking-tight text-[var(--ink)]">
+              {displayName.split(" ")[0]}
+            </h1>
           </div>
 
-          <nav className="mt-5 flex gap-2 max-[460px]:mt-4 max-[460px]:overflow-x-auto">
-            {tabs.map(({ id, label, icon: Icon }) => {
-              const selected = id === activeTab;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => onTabChange(id)}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-2xl px-3 py-3 text-left transition ${
-                    selected
-                      ? "bg-slate-800 text-white shadow-card"
-                      : "bg-white/70 text-slate-600 hover:-translate-y-0.5 hover:bg-white"
-                  }`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="text-sm font-semibold">{label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
+          <div className="flex gap-4">
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-bold text-[var(--muted)] uppercase">Health</span>
+              <span className={`text-sm font-black ${hp < 0 ? "text-[var(--danger)]" : "text-[var(--leaf)]"}`}>
+                {hp} HP
+              </span>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-bold text-[var(--muted)] uppercase">Level</span>
+              <span className="text-sm font-black text-[var(--sky-dark)]">
+                LVL {level}
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        <main className="relative min-h-[600px] overflow-y-auto px-5 py-5 max-[460px]:px-4">{children}</main>
-      </div>
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 overflow-y-auto px-6 pb-24 scrollbar-hide">
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {children}
+        </div>
+      </main>
+
+      {/* BOTTOM NAVIGATION */}
+      <nav className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-2xl border border-[var(--border)] bg-[var(--paper)]/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
+        <button
+          onClick={() => onTabChange("log")}
+          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+            activeTab === "log" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
+          }`}
+        >
+          <Timer className="h-5 w-5" />
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Start</span>
+        </button>
+        <button
+          onClick={() => onTabChange("stats")}
+          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+            activeTab === "stats" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
+          }`}
+        >
+          <BarChart3 className="h-5 w-5" />
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Stats</span>
+        </button>
+        <button
+          onClick={() => onTabChange("friends")}
+          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+            activeTab === "friends" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
+          }`}
+        >
+          <Users className="h-5 w-5" />
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Friends</span>
+        </button>
+        <button
+          onClick={() => onTabChange("settings")}
+          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+            activeTab === "settings" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
+          }`}
+        >
+          <SettingsIcon className="h-5 w-5" />
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Settings</span>
+        </button>
+        <button
+          onClick={() => onTabChange("info")}
+          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+            activeTab === "info" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
+          }`}
+        >
+          <Info className="h-5 w-5" />
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Info</span>
+        </button>
+      </nav>
     </div>
   );
 }

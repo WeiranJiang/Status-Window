@@ -153,7 +153,7 @@ const playCompletionSound = async (volume: number) => {
 };
 
 const scheduleTimerAlarm = async (state: TimerState) => {
-  if (!state.active || state.mode !== "timer" || !state.targetDurationMs || state.paused) {
+  if (!state.active || !state.targetDurationMs || state.paused) {
     await offscreenChrome.alarms.clear(TIMER_ALARM);
     return;
   }
@@ -243,7 +243,7 @@ offscreenChrome.runtime.onMessage.addListener((message, _sender, sendResponse) =
           startedAtMs: now,
           lastResumedAtMs: now,
           accumulatedMs: 0,
-          targetDurationMs: payload.targetDurationMs,
+          targetDurationMs: payload.mode === "stopwatch" ? 6 * 60 * 60 * 1000 : payload.targetDurationMs,
           paused: false,
           userId: payload.userId,
           authAccessToken: payload.authAccessToken,
@@ -328,7 +328,7 @@ offscreenChrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 
   const state = await getTimerState();
-  if (!state.active || state.mode !== "timer") {
+  if (!state.active) {
     return;
   }
 

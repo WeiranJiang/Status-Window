@@ -1,4 +1,4 @@
-export type AppTab = "log" | "stats" | "settings";
+export type AppTab = "log" | "stats" | "friends" | "settings" | "info";
 export type AuthMode = "signup" | "login";
 export type SessionMode = "stopwatch" | "timer";
 export type ThemeMode = "light" | "dark";
@@ -48,13 +48,16 @@ export interface ColorScheme {
   id: string;
   name: string;
   description: string;
-  surface: string;
+  bg: string;
+  paper: string;
+  ink: string;
+  inkSoft: string;
+  muted: string;
   accent: string;
   accentSoft: string;
   accentStrong: string;
-  shadow: string;
-  ink: string;
-  page: string;
+  success: string;
+  danger: string;
   border: string;
 }
 
@@ -101,6 +104,12 @@ export interface DashboardData {
   profile: Profile | null;
   subjects: Subject[];
   sessions: StudySession[];
+  settings: UserSettings;
+}
+
+export interface DashboardCoreData {
+  profile: Profile | null;
+  subjects: Subject[];
   settings: UserSettings;
 }
 

@@ -68,14 +68,19 @@ export const calculateHP = (sessions: StudySession[], today = new Date()) => {
     return 0;
   }
 
+  let earliestStartTime = sessions[0].start_time;
   const sessionsByDay = sessions.reduce((map, session) => {
+    if (session.start_time < earliestStartTime) {
+      earliestStartTime = session.start_time;
+    }
+
     const key = toLocalDateKey(session.start_time);
     const current = map.get(key) ?? 0;
     map.set(key, current + session.duration_seconds);
     return map;
   }, new Map<string, number>());
 
-  const firstDay = new Date(sessions[0].start_time);
+  const firstDay = new Date(earliestStartTime);
   firstDay.setHours(0, 0, 0, 0);
 
   const endDay = new Date(today);

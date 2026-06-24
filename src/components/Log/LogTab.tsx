@@ -38,6 +38,11 @@ export function LogTab({
     }
 
     const totalMinutes = Number(hours) * 60 + Number(minutes);
+    if (totalMinutes > 360) {
+      setFormError("Maximum session length is 6 hours (360 minutes).");
+      return;
+    }
+
     const durationMs = mode === "timer" ? totalMinutes * 60_000 : null;
 
     if (mode === "timer" && (!Number.isFinite(totalMinutes) || totalMinutes <= 0)) {
@@ -50,124 +55,93 @@ export function LogTab({
   };
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-[24px] border border-white/60 bg-white/85 p-4 shadow-card">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Log</p>
-        <h2 className="mt-1 text-2xl font-bold text-slate-900">What are you focusing on?</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Pick a subject, choose your timing style, and let Status Window keep the session safe in the background.
-        </p>
-      </section>
-
+    <div className="flex h-full flex-col gap-3">
       {activeTimer ? (
         <TimerStatusCard timer={activeTimer} onPause={onPause} onResume={onResume} onStop={onStop} />
       ) : (
-        <>
-          <section className="rounded-[24px] border border-white/60 bg-white/85 p-4 shadow-card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Subjects</p>
-                <h3 className="mt-1 text-lg font-bold text-slate-900">Choose a track</h3>
-              </div>
-              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                {activeSubjects.length} active
-              </div>
+        <div className="flex flex-col gap-6 py-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* SUBJECT SELECTOR */}
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Subject</span>
+            <div className="mt-3">
+              <select
+                value={selectedSubjectId}
+                onChange={(e) => setSelectedSubjectId(e.target.value)}
+                className="w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3.5 text-sm font-bold text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)] appearance-none cursor-pointer"
+              >
+                {activeSubjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {activeSubjects.map((subject) => {
-                const selected = subject.id === selectedSubject?.id;
-                return (
-                  <button
-                    key={subject.id}
-                    type="button"
-                    onClick={() => setSelectedSubjectId(subject.id)}
-                    className={`rounded-2xl border px-3 py-3 text-left transition ${
-                      selected ? "border-slate-900 bg-slate-900 text-white" : "border-white/70 bg-white/75 text-slate-700"
-                    }`}
-                  >
-                    <div
-                      className="mb-2 h-2 w-10 rounded-full"
-                      style={{ backgroundColor: subject.color ?? "#94a3b8" }}
-                    />
-                    <div className="font-semibold">{subject.name}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          </div>
 
-          <section className="rounded-[24px] border border-white/60 bg-white/85 p-4 shadow-card">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Mode</p>
+          {/* MODE & TIME */}
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Session Mode</span>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setMode("stopwatch")}
-                className={`rounded-2xl border px-4 py-4 text-left transition ${
-                  mode === "stopwatch" ? "border-slate-900 bg-slate-900 text-white" : "border-white/70 bg-white/75 text-slate-700"
+                className={`flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all ${
+                  mode === "stopwatch" ? "border-[var(--sky)] bg-[var(--paper)] shadow-md ring-1 ring-[var(--sky)]" : "border-[var(--border)] bg-[var(--paper)]/60 opacity-60"
                 }`}
               >
-                <Clock3 className="h-5 w-5" />
-                <div className="mt-2 text-sm font-semibold">Stopwatch</div>
-                <p className="mt-1 text-xs opacity-80">Open-ended focus with pause, resume, and manual stop.</p>
+                <Clock3 className={`h-6 w-6 ${mode === "stopwatch" ? "text-[var(--sky)]" : ""}`} />
+                <span className="text-[11px] font-extrabold uppercase tracking-tight">Stopwatch</span>
               </button>
               <button
                 type="button"
                 onClick={() => setMode("timer")}
-                className={`rounded-2xl border px-4 py-4 text-left transition ${
-                  mode === "timer" ? "border-slate-900 bg-slate-900 text-white" : "border-white/70 bg-white/75 text-slate-700"
+                className={`flex flex-col items-center gap-2 rounded-2xl border p-4 transition-all ${
+                  mode === "timer" ? "border-[var(--sky)] bg-[var(--paper)] shadow-md ring-1 ring-[var(--sky)]" : "border-[var(--border)] bg-[var(--paper)]/60 opacity-60"
                 }`}
               >
-                <TimerReset className="h-5 w-5" />
-                <div className="mt-2 text-sm font-semibold">Timer</div>
-                <p className="mt-1 text-xs opacity-80">Counts down, auto-saves, and can finish even after closing the popup.</p>
+                <TimerReset className={`h-6 w-6 ${mode === "timer" ? "text-[var(--sky)]" : ""}`} />
+                <span className="text-[11px] font-extrabold uppercase tracking-tight">Timer</span>
               </button>
             </div>
 
             {mode === "timer" ? (
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    Hours
-                  </span>
+              <div className="mt-4 flex animate-in slide-in-from-top-2 items-center gap-3">
+                <div className="relative flex-1">
                   <input
                     type="number"
                     min="0"
                     value={hours}
-                    onChange={(event) => setHours(event.target.value)}
-                    className="w-full rounded-2xl border border-white/70 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-card outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                    onChange={(e) => setHours(e.target.value)}
+                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-lg font-black text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                   />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    Minutes
-                  </span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[var(--muted)]">HOURS</span>
+                </div>
+                <div className="relative flex-1">
                   <input
                     type="number"
                     min="0"
                     value={minutes}
-                    onChange={(event) => setMinutes(event.target.value)}
-                    className="w-full rounded-2xl border border-white/70 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-card outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                    onChange={(e) => setMinutes(e.target.value)}
+                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-lg font-black text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                   />
-                </label>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[var(--muted)]">MINS</span>
+                </div>
               </div>
             ) : null}
+          </div>
 
-            <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
-              Sessions under {MINIMUM_CONFIRM_SAVE_SECONDS} seconds will ask before saving, so accidental taps do not clutter your history.
-            </div>
-
-            {formError ? <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{formError}</div> : null}
-
+          {/* ACTION */}
+          <div className="mt-4">
             <button
-              type="button"
               onClick={() => void startSession()}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white shadow-card transition hover:-translate-y-0.5 hover:bg-slate-900"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[var(--ink)] py-5 text-lg font-black tracking-tight text-white shadow-2xl transition-all hover:bg-black active:scale-[0.98]"
             >
-              <Play className="h-4 w-4" />
-              Start Session
+              <Play className="h-6 w-6 fill-white" />
+              START SESSION
             </button>
-          </section>
-        </>
+            {formError ? <div className="mt-4 rounded-xl bg-red-50 p-3 text-center text-xs font-bold text-red-500">{formError}</div> : null}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,7 +2,6 @@ import { resolve } from "node:path";
 import { copyFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { viteStaticCopy } from "vite-plugin-static-copy";
 
 const manifestBuildPlugin = () => ({
   name: "status-window-manifest-build",
@@ -16,17 +15,15 @@ export default defineConfig({
   base: "./",
   plugins: [
     react(),
-    viteStaticCopy({
-      targets: [],
-    }),
     manifestBuildPlugin(),
   ],
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,
     rollupOptions: {
       input: {
+        index: resolve(__dirname, "index.html"),
         popup: resolve(__dirname, "popup.html"),
         sidepanel: resolve(__dirname, "sidepanel.html"),
         offscreen: resolve(__dirname, "offscreen.html"),
@@ -37,6 +34,10 @@ export default defineConfig({
           chunkInfo.name === "background" ? "background.js" : "assets/[name].js",
         chunkFileNames: "assets/[name].js",
         assetFileNames: "assets/[name][extname]",
+        manualChunks: {
+          react: ["react", "react-dom"],
+          supabase: ["@supabase/supabase-js"],
+        },
       },
     },
   },

@@ -19,63 +19,44 @@ export function TimerStatusCard({
       : Math.floor(timer.elapsedMs / 1000);
 
   return (
-    <section className="rounded-[24px] border border-white/60 bg-white/85 p-4 shadow-card">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-            {timer.mode === "timer" ? "Timer Session" : "Stopwatch Session"}
-          </p>
-          <h2 className="mt-1 text-lg font-bold text-slate-900">{timer.subjectName}</h2>
-        </div>
-        <div
-          className="rounded-full px-3 py-1 text-xs font-semibold text-slate-700"
-          style={{
-            backgroundColor: timer.subjectColor ? `${timer.subjectColor}22` : "rgba(148, 163, 184, 0.25)",
-          }}
+    <div className="flex flex-col items-center justify-center py-10 text-center animate-in zoom-in-95 duration-300">
+      <div className="mb-4">
+        <span
+          className="inline-block rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-white shadow-md ring-2 ring-white/20"
+          style={{ backgroundColor: timer.subjectColor ?? "var(--sky)" }}
         >
-          {timer.paused ? "Paused" : "In Progress"}
-        </div>
+          {timer.subjectName}
+        </span>
       </div>
 
-      <div className="mt-4 rounded-[24px] bg-slate-900 px-4 py-5 text-center text-white shadow-card">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-300">
-          {timer.mode === "timer" ? "Remaining" : "Elapsed"}
-        </p>
-        <div className="mt-3 font-display text-4xl font-bold tracking-[0.16em] text-white">
-          {formatSeconds(displaySeconds)}
-        </div>
+      <div className="my-8 font-mono text-7xl font-black tracking-tighter text-[var(--ink)] tabular-nums">
+        {formatSeconds(displaySeconds)}
       </div>
 
-      <div className="mt-4 flex gap-3">
-        {timer.paused ? (
+      <div className="flex items-center gap-6 mt-6">
+        {!timer.paused ? (
           <button
-            type="button"
-            onClick={() => void onResume()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-900 transition hover:-translate-y-0.5"
+            onClick={() => void onPause()}
+            className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--paper)] border border-[var(--border)] text-[var(--ink)] transition-all hover:border-[var(--sky)] hover:text-[var(--sky-dark)] hover:shadow-lg active:scale-95"
           >
-            <Play className="h-4 w-4" />
-            Resume
+            <Pause className="h-7 w-7 fill-current" />
           </button>
         ) : (
           <button
-            type="button"
-            onClick={() => void onPause()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900 transition hover:-translate-y-0.5"
+            onClick={() => void onResume()}
+            className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--sky)] text-white transition-all hover:bg-[var(--sky-dark)] shadow-xl active:scale-95"
           >
-            <Pause className="h-4 w-4" />
-            Pause
+            <Play className="h-7 w-7 fill-current ml-1" />
           </button>
         )}
 
         <button
-          type="button"
           onClick={() => void onStop()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-900 transition hover:-translate-y-0.5"
+          className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--paper)] border border-red-100 text-red-500 transition-all hover:border-red-200 hover:bg-red-50 hover:shadow-lg active:scale-95"
         >
-          <Square className="h-4 w-4" />
-          Stop
+          <Square className="h-6 w-6 fill-current" />
         </button>
       </div>
-    </section>
+    </div>
   );
 }

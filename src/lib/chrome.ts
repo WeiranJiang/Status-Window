@@ -39,7 +39,7 @@ export const sendRuntimeMessage = async <TResponse>(
   });
 };
 
-export const getExtensionRedirectUrl = () => extensionChrome?.identity?.getRedirectURL("supabase-auth");
+export const getExtensionRedirectUrl = () => extensionChrome?.identity?.getRedirectURL();
 
 export const openGoogleOAuthWindow = async (url: string) => {
   if (!extensionChrome?.identity?.launchWebAuthFlow) {
