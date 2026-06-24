@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Nunito", system-ui, sans-serif;
+  color: var(--sw-ink, #25304d);
+  background: var(--sw-page, linear-gradient(180deg, #edf4ff 0%, #fff9f4 100%));
+}
+
+html,
+body,
+#root,
+#sidepanel-root {
+  margin: 0;
+  min-height: 100%;
+}
+
+html {
+  min-width: 420px;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: var(--sw-page, linear-gradient(180deg, #edf4ff 0%, #fff9f4 100%));
+  color: var(--sw-ink, #25304d);
+}
+
+#root {
+  width: 420px;
+}
+
+.status-window-shell {
+  width: 100%;
+  max-width: 420px;
+}
+
+.sidepanel-shell {
+  width: 100%;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.9), transparent 28%),
+    var(--sw-page, linear-gradient(180deg, #edf4ff 0%, #fff9f4 100%));
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.35);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+input,
+button,
+select {
+  font: inherit;
+}
