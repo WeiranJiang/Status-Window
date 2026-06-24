@@ -1,4 +1,4 @@
-import { LoaderCircle, Sparkles } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import type { AuthMode } from "../../types";
 
@@ -35,25 +35,18 @@ export function AuthScreen({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.95),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(252,235,245,0.7),_transparent_40%)]" />
       <div className="relative flex min-h-[600px] flex-col justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-500 shadow-card">
-            <Sparkles className="h-3.5 w-3.5" />
-            Cozy productivity dashboard
-          </div>
           <h1 className="mt-5 font-display text-4xl font-bold text-slate-900">Welcome!</h1>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-slate-600">
-            Status Window keeps your study sessions, subjects, and progress in one soft little control room.
-          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {isSignup ? (
             <label className="block">
-              <span className="mb-1.5 block text-sm font-semibold text-slate-700">Display name</span>
+              <span className="mb-1.5 block text-sm font-semibold text-slate-700">Name</span>
               <input
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
                 className="w-full rounded-2xl border border-white/70 bg-white/90 px-4 py-3 text-sm text-slate-800 shadow-card outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-                placeholder="Study Hero"
+                placeholder="John Smith"
                 required
               />
             </label>
@@ -77,7 +70,7 @@ export function AuthScreen({
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-2xl border border-white/70 bg-white/90 px-4 py-3 text-sm text-slate-800 shadow-card outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
-              placeholder={isSignup ? "Pick a cozy secret" : "Your password"}
+              placeholder={isSignup ? "xxxxxxxx" : "Your password"}
               type="password"
               required
             />

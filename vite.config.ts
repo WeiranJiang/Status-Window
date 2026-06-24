@@ -1,7 +1,15 @@
 import { resolve } from "node:path";
+import { copyFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
+
+const manifestBuildPlugin = () => ({
+  name: "status-window-manifest-build",
+  closeBundle() {
+    copyFileSync(resolve(__dirname, "manifest.dist.json"), resolve(__dirname, "dist/manifest.json"));
+  },
+});
 
 export default defineConfig({
   appType: "mpa",
@@ -9,8 +17,9 @@ export default defineConfig({
   plugins: [
     react(),
     viteStaticCopy({
-      targets: [{ src: "manifest.json", dest: "." }],
+      targets: [],
     }),
+    manifestBuildPlugin(),
   ],
   build: {
     outDir: "dist",

@@ -13,8 +13,13 @@ import type {
 const TIMER_STATE_KEY = "status-window-timer-state";
 const TIMER_NOTICE_KEY = "status-window-timer-notice";
 const TIMER_ALARM = "status-window-timer-alarm";
-const OFFSCREEN_PATH = "offscreen.html";
 const offscreenChrome = globalThis.chrome;
+const manifestBackground = offscreenChrome?.runtime?.getManifest?.().background;
+const backgroundWorkerPath =
+  manifestBackground && "service_worker" in manifestBackground ? manifestBackground.service_worker : undefined;
+const distPrefix = backgroundWorkerPath?.startsWith("dist/") ? "dist/" : "";
+const OFFSCREEN_PATH = `${distPrefix}offscreen.html`;
+const SIDEPANEL_PATH = `${distPrefix}sidepanel.html`;
 
 const emptyTimerState = (): TimerState => ({
   active: false,
@@ -207,7 +212,7 @@ offscreenChrome.runtime.onInstalled.addListener(async () => {
   if (offscreenChrome.sidePanel) {
     await offscreenChrome.sidePanel.setOptions({
       enabled: false,
-      path: "sidepanel.html",
+      path: SIDEPANEL_PATH,
     });
   }
 });

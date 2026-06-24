@@ -8,6 +8,12 @@ import type {
 } from "../types";
 
 const extensionChrome = globalThis.chrome;
+const manifestBackground = extensionChrome?.runtime?.getManifest?.().background;
+const backgroundWorkerPath =
+  manifestBackground && "service_worker" in manifestBackground ? manifestBackground.service_worker : undefined;
+const distPrefix = backgroundWorkerPath?.startsWith("dist/") ? "dist/" : "";
+
+const withDistPrefix = (path: string) => `${distPrefix}${path.replace(/^\//, "")}`;
 
 export const hasChromeRuntime = Boolean(extensionChrome?.runtime?.id);
 export const hasChromeIdentity = Boolean(extensionChrome?.identity?.launchWebAuthFlow);
@@ -88,7 +94,7 @@ export const setFloatingMode = async (enabled: boolean) => {
 
   await extensionChrome.sidePanel.setOptions({
     enabled,
-    path: "sidepanel.html",
+    path: withDistPrefix("sidepanel.html"),
   });
 
   if (enabled && extensionChrome.windows?.getCurrent) {
@@ -100,4 +106,4 @@ export const setFloatingMode = async (enabled: boolean) => {
 };
 
 export const resolveExtensionAsset = (path: string) =>
-  extensionChrome?.runtime?.getURL ? extensionChrome.runtime.getURL(path.replace(/^\//, "")) : path;
+  extensionChrome?.runtime?.getURL ? extensionChrome.runtime.getURL(withDistPrefix(path)) : path;
