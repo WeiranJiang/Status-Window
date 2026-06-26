@@ -109,26 +109,8 @@ create table if not exists public.friend_requests (
 create index if not exists friend_requests_from_idx on public.friend_requests(from_user_id);
 create index if not exists friend_requests_to_idx   on public.friend_requests(to_user_id);
 
--- Email invites let you invite someone before they have an account.
-create table if not exists public.friend_email_invites (
-  id uuid primary key default gen_random_uuid(),
-  from_user_id uuid not null references auth.users(id) on delete cascade,
-  to_email text not null,
-  status text not null default 'pending' check (status in ('pending', 'claimed', 'cancelled')),
-  claimed_by_user_id uuid references auth.users(id) on delete set null,
-  created_at timestamptz not null default now(),
-  claimed_at timestamptz
-);
-
-create index if not exists friend_email_invites_from_idx on public.friend_email_invites(from_user_id);
-create index if not exists friend_email_invites_to_email_idx on public.friend_email_invites(lower(to_email));
-create unique index if not exists friend_email_invites_pending_unique_idx
-on public.friend_email_invites (from_user_id, lower(to_email))
-where status = 'pending';
-
 -- RLS
 alter table public.friend_requests enable row level security;
-alter table public.friend_email_invites enable row level security;
 
 -- Each user can see requests they sent or received
 create policy "friend_requests visible to participants"
@@ -142,22 +124,6 @@ on public.friend_requests for insert
 to authenticated
 with check (from_user_id = auth.uid());
 
--- Recipients can claim a pending email invite, which creates the real request
-create policy "friend_requests insert from email invite"
-on public.friend_requests for insert
-to authenticated
-with check (
-  to_user_id = auth.uid()
-  and from_user_id <> auth.uid()
-  and exists (
-    select 1
-    from public.friend_email_invites e
-    where e.from_user_id = friend_requests.from_user_id
-      and e.status = 'pending'
-      and lower(e.to_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-  )
-);
-
 -- Participants can update status (accept/decline)
 create policy "friend_requests update by participants"
 on public.friend_requests for update
@@ -169,36 +135,6 @@ create policy "friend_requests delete by participants"
 on public.friend_requests for delete
 to authenticated
 using (from_user_id = auth.uid() or to_user_id = auth.uid());
-
-create policy "friend_email_invites visible to sender or recipient"
-on public.friend_email_invites for select
-to authenticated
-using (
-  from_user_id = auth.uid()
-  or lower(to_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-);
-
-create policy "friend_email_invites insert own"
-on public.friend_email_invites for insert
-to authenticated
-with check (from_user_id = auth.uid());
-
-create policy "friend_email_invites update by sender or recipient"
-on public.friend_email_invites for update
-to authenticated
-using (
-  from_user_id = auth.uid()
-  or lower(to_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-)
-with check (
-  from_user_id = auth.uid()
-  or lower(to_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-);
-
-create policy "friend_email_invites delete by sender"
-on public.friend_email_invites for delete
-to authenticated
-using (from_user_id = auth.uid());
 
 -- Allow friends to read each other's profiles
 drop policy if exists "profiles own rows" on public.profiles;
@@ -290,7 +226,6 @@ If you rerun policies in an existing project, add `drop policy if exists ...` fi
 1. In Supabase, enable Email provider.
 2. For the smoothest extension flow, disable email confirmation while testing, or set Supabase `Authentication -> URL Configuration -> Site URL` to a normal web page you control.
 3. The extension now avoids using `https://<extension-id>.chromiumapp.org/` for email confirmation links because that redirect works for Chrome Identity OAuth, not for links opened from an email client.
-4. Email-based friend invites use a Supabase email sign-in link, so the Site URL must open a working copy of the app for recipients.
 
 ## Google OAuth setup
 
