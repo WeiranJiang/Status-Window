@@ -25,6 +25,11 @@ const todayUtcStart = () => {
   return d.toISOString();
 };
 
+const formatFriendName = (displayName: string | null | undefined) => {
+  const trimmed = displayName?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "Unknown user";
+};
+
 // ── Friend requests ────────────────────────────────────────────────────────
 
 /** Send a friend request from the current user to another user by their ID. */
@@ -95,6 +100,11 @@ export const removeFriend = async (requestId: string): Promise<void> => {
   if (error) throw new Error(error.message);
 };
 
+/** Withdraw a pending friend request. */
+export const withdrawFriendRequest = async (requestId: string): Promise<void> => {
+  await removeFriend(requestId);
+};
+
 // ── Loading ────────────────────────────────────────────────────────────────
 
 export interface IncomingRequest {
@@ -103,24 +113,85 @@ export interface IncomingRequest {
   displayName: string;
 }
 
+export interface OutgoingRequest {
+  id: string;
+  toUserId: string;
+  displayName: string;
+}
+
 /** Load pending requests directed at the current user. */
 export const loadIncomingRequests = async (userId: string): Promise<IncomingRequest[]> => {
   const { data, error } = await supabase
     .from("friend_requests")
-    .select("id, from_user_id, profiles!friend_requests_from_user_id_fkey(display_name)")
+    .select("id, from_user_id")
     .eq("to_user_id", userId)
     .eq("status", "pending");
 
   if (error) throw new Error(error.message);
 
-  return ((data as Array<{
+  const rows = (data as Array<{
     id: string;
     from_user_id: string;
-    profiles: { display_name: string | null } | null;
-  }>) ?? []).map((row) => ({
+  }>) ?? [];
+
+  const requesterIds = Array.from(new Set(rows.map((row) => row.from_user_id)));
+  const profileMap: Record<string, string> = {};
+
+  if (requesterIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", requesterIds);
+
+    if (profilesError) throw new Error(profilesError.message);
+
+    ((profiles as Array<{ id: string; display_name: string | null }>) ?? []).forEach((profile) => {
+      profileMap[profile.id] = formatFriendName(profile.display_name);
+    });
+  }
+
+  return rows.map((row) => ({
     id: row.id,
     fromUserId: row.from_user_id,
-    displayName: row.profiles?.display_name ?? row.from_user_id.slice(0, 8),
+    displayName: profileMap[row.from_user_id] ?? "Unknown user",
+  }));
+};
+
+/** Load pending requests sent by the current user. */
+export const loadOutgoingRequests = async (userId: string): Promise<OutgoingRequest[]> => {
+  const { data, error } = await supabase
+    .from("friend_requests")
+    .select("id, to_user_id")
+    .eq("from_user_id", userId)
+    .eq("status", "pending");
+
+  if (error) throw new Error(error.message);
+
+  const rows = (data as Array<{
+    id: string;
+    to_user_id: string;
+  }>) ?? [];
+
+  const recipientIds = Array.from(new Set(rows.map((row) => row.to_user_id)));
+  const profileMap: Record<string, string> = {};
+
+  if (recipientIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", recipientIds);
+
+    if (profilesError) throw new Error(profilesError.message);
+
+    ((profiles as Array<{ id: string; display_name: string | null }>) ?? []).forEach((profile) => {
+      profileMap[profile.id] = formatFriendName(profile.display_name);
+    });
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    toUserId: row.to_user_id,
+    displayName: profileMap[row.to_user_id] ?? "Unknown user",
   }));
 };
 
@@ -156,7 +227,7 @@ export const loadFriends = async (userId: string): Promise<{ list: FriendProfile
   if (profErr) throw new Error(profErr.message);
   const profileMap: Record<string, string> = {};
   ((profiles as Array<{ id: string; display_name: string | null }>) ?? []).forEach((p) => {
-    profileMap[p.id] = p.display_name ?? p.id.slice(0, 8);
+    profileMap[p.id] = formatFriendName(p.display_name);
   });
 
   // Step 3: today's study seconds per friend
@@ -189,7 +260,7 @@ export const loadFriends = async (userId: string): Promise<{ list: FriendProfile
 
   const list: FriendProfile[] = friendIds.map((id) => ({
     userId: id,
-    displayName: profileMap[id] ?? id.slice(0, 8),
+    displayName: profileMap[id] ?? "Unknown user",
     todaySeconds: secondsMap[id] ?? 0,
     isOnline: onlineSet.has(id),
   }));

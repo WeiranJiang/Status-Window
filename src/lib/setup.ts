@@ -49,7 +49,7 @@ const getFallbackDisplayName = (user: User) =>
   user.user_metadata?.full_name ??
   user.user_metadata?.name ??
   user.email?.split("@")[0] ??
-  "Study Hero";
+  "John Smith";
 
 export const ensureInitialUserData = async (user: User) => {
   return withDataTiming("ensureInitialUserData", async () => {

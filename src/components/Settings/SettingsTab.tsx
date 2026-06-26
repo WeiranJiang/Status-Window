@@ -1,7 +1,52 @@
 import { COLOR_SCHEMES } from "../../lib/constants";
 import { Check, LogOut, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Subject, UserSettings } from "../../types";
+
+function PreferenceCheck({
+  checked,
+  onToggle,
+  label,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onToggle}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-sm transition-all active:scale-95 ${
+        checked
+          ? "border-[var(--sky-soft)] bg-[var(--paper)] text-[var(--sky)]"
+          : "border-[var(--border)] bg-[var(--paper)] text-transparent hover:border-[var(--sky)] hover:bg-[color-mix(in_srgb,var(--paper)_76%,var(--sky-soft))]"
+      }`}
+    >
+      <Check className="h-4 w-4" />
+    </button>
+  );
+}
+
+function PreferenceActionButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-9 items-center justify-center rounded-full bg-[var(--sky)] px-4 text-[10px] font-black uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[var(--sky-dark)] active:scale-95"
+    >
+      {label}
+    </button>
+  );
+}
 
 export function SettingsTab({
   settings,
@@ -29,9 +74,14 @@ export function SettingsTab({
   const [newSubColor, setNewSubColor] = useState("#5b9bd5");
   const [dispName, setDispName] = useState(initialDisplayName);
   const [subjectDrafts, setSubjectDrafts] = useState<Record<string, string>>({});
+  const [subjectColorDrafts, setSubjectColorDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setDispName(initialDisplayName);
+  }, [initialDisplayName]);
 
   return (
-    <div className="flex flex-col gap-10 py-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="flex flex-col gap-6 py-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
       {/* IDENTITY */}
       <section>
         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Profile</span>
@@ -40,7 +90,7 @@ export function SettingsTab({
             value={dispName}
             onChange={(e) => setDispName(e.target.value)}
             className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-xs font-bold text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
-            placeholder="Display Name"
+            placeholder="Name"
           />
           <button
             onClick={() => void onSaveDisplayName(dispName)}
@@ -54,10 +104,21 @@ export function SettingsTab({
       {/* SUBJECTS */}
       <section>
         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Subjects</span>
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-2">
           {activeSubjects.map((s) => (
             <div key={s.id} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 shadow-sm">
-              <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: s.color ?? "#5b9bd5" }} />
+              <input
+                type="color"
+                value={subjectColorDrafts[s.id] ?? s.color ?? "#5b9bd5"}
+                onChange={(e) =>
+                  setSubjectColorDrafts((current) => ({
+                    ...current,
+                    [s.id]: e.target.value,
+                  }))
+                }
+                className="h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-[var(--border)] p-0"
+                aria-label={`Change color for subject ${s.name}`}
+              />
               <input
                 value={subjectDrafts[s.id] ?? s.name}
                 onChange={(e) =>
@@ -72,18 +133,28 @@ export function SettingsTab({
               <button
                 onClick={async () => {
                   const nextName = (subjectDrafts[s.id] ?? s.name).trim();
-                  if (!nextName || nextName === s.name) {
+                  const nextColor = subjectColorDrafts[s.id] ?? s.color ?? "#5b9bd5";
+
+                  if (!nextName) {
+                    return;
+                  }
+
+                  if (nextName === s.name && nextColor === (s.color ?? "#5b9bd5")) {
                     return;
                   }
 
                   await onUpdateSubject(s.id, {
                     name: nextName,
-                    color: s.color ?? "#5b9bd5",
+                    color: nextColor,
                   });
 
                   setSubjectDrafts((current) => ({
                     ...current,
                     [s.id]: nextName,
+                  }));
+                  setSubjectColorDrafts((current) => ({
+                    ...current,
+                    [s.id]: nextColor,
                   }));
                 }}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sky)] text-white shadow-md active:scale-95 transition-all"
@@ -132,7 +203,7 @@ export function SettingsTab({
       {/* COLOR SCHEME */}
       <section>
         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Color Scheme</span>
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-2 gap-3">
           {COLOR_SCHEMES.slice(0, 4).map((scheme) => {
             const active = settings.color_scheme === scheme.id;
             return (
@@ -150,8 +221,7 @@ export function SettingsTab({
                   <span className="h-4 w-4 rounded-full border border-black/5" style={{ backgroundColor: scheme.paper }} />
                   <span className="h-4 w-4 rounded-full border border-black/5" style={{ backgroundColor: scheme.accent }} />
                 </div>
-                <div className="text-xs font-black text-[var(--ink)]">{scheme.name}</div>
-                <div className="mt-1 text-[10px] font-bold leading-4 text-[var(--muted)]">{scheme.description}</div>
+                <div className="text-sm font-black text-[var(--ink)]">{scheme.name}</div>
               </button>
             );
           })}
@@ -161,17 +231,15 @@ export function SettingsTab({
       {/* OPTIONS */}
       <section>
         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Preferences</span>
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--paper)]/70 px-4 py-3">
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-[var(--ink)]">Floating Mode</span>
-              <span className="text-[9px] font-bold text-[var(--muted)] uppercase">Sidepanel always open</span>
+              <span className="text-xs font-bold text-[var(--ink)]">Visible Timer</span>
+              <span className="text-[9px] font-bold text-[var(--muted)] uppercase">Open the side panel timer</span>
             </div>
-            <input
-              type="checkbox"
-              checked={settings.floating_mode_enabled}
-              onChange={(e) => void onUpdateSettings({ floating_mode_enabled: e.target.checked })}
-              className="h-5 w-5 rounded border-[var(--border)] text-[var(--sky)] focus:ring-[var(--sky)]"
+            <PreferenceActionButton
+              label="Open Timer"
+              onClick={() => void onUpdateSettings({ floating_mode_enabled: true })}
             />
           </div>
           <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--paper)]/70 px-4 py-3">
@@ -179,11 +247,10 @@ export function SettingsTab({
               <span className="text-xs font-bold text-[var(--ink)]">Sound Effects</span>
               <span className="text-[9px] font-bold text-[var(--muted)] uppercase">Timer completion alerts</span>
             </div>
-            <input
-              type="checkbox"
+            <PreferenceCheck
               checked={settings.timer_sound_enabled}
-              onChange={(e) => void onUpdateSettings({ timer_sound_enabled: e.target.checked })}
-              className="h-5 w-5 rounded border-[var(--border)] text-[var(--sky)] focus:ring-[var(--sky)]"
+              onToggle={() => void onUpdateSettings({ timer_sound_enabled: !settings.timer_sound_enabled })}
+              label="Toggle sound effects"
             />
           </div>
         </div>

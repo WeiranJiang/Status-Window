@@ -15,20 +15,14 @@
     "default_path": "dist/sidepanel.html"
   },
   "permissions": ["storage", "identity", "alarms", "sidePanel", "offscreen"],
-  "host_permissions": ["https://*.supabase.co/*"],
+  "host_permissions": ["https://bbqkxxcuufbcegdqzony.supabase.co/*"],
   "icons": {
     "16": "dist/icons/icon-16.png",
     "32": "dist/icons/icon-32.png",
     "48": "dist/icons/icon-48.png",
     "128": "dist/icons/icon-128.png"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["dist/sounds/*.wav", "dist/icons/*.png"],
-      "matches": ["<all_urls>"]
-    }
-  ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bbqkxxcuufbcegdqzony.supabase.co wss://bbqkxxcuufbcegdqzony.supabase.co;"
   }
 }

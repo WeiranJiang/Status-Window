@@ -5,10 +5,13 @@ import {
   declineFriendRequest,
   loadFriends,
   loadIncomingRequests,
+  loadOutgoingRequests,
   removeFriend,
   sendFriendRequest,
+  withdrawFriendRequest,
   type FriendProfile,
   type IncomingRequest,
+  type OutgoingRequest,
 } from "../../lib/friends";
 import { formatDurationShort } from "../../lib/stats";
 
@@ -44,10 +47,11 @@ export function FriendsTab({
   const [sendBusy, setSendBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [incoming, setIncoming] = useState<IncomingRequest[]>([]);
+  const [outgoing, setOutgoing] = useState<OutgoingRequest[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [reqIdMap, setReqIdMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [dbMissing, setDbMissing] = useState(false);
+  const [dbIssueMessage, setDbIssueMessage] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -57,21 +61,24 @@ export function FriendsTab({
 
   const refresh = async () => {
     try {
-      const [incomingData, { list, requestId }] = await Promise.all([
+      const [incomingData, outgoingData, { list, requestId }] = await Promise.all([
         loadIncomingRequests(userId),
+        loadOutgoingRequests(userId),
         loadFriends(userId),
       ]);
       if (!mountedRef.current) return;
       setIncoming(incomingData);
+      setOutgoing(outgoingData);
       setFriends(list);
       const map: Record<string, string> = {};
       list.forEach((f) => { map[f.userId] = requestId(f.userId); });
       setReqIdMap(map);
+      setDbIssueMessage(null);
     } catch (err) {
       if (!mountedRef.current) return;
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.toLowerCase().includes("table") || msg.toLowerCase().includes("schema")) {
-        setDbMissing(true);
+        setDbIssueMessage(msg);
       } else {
         onError(msg);
       }
@@ -82,7 +89,12 @@ export function FriendsTab({
 
   useEffect(() => {
     void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    const interval = window.setInterval(() => {
+      void refresh();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
   }, [userId]);
 
   const handleSend = async () => {
@@ -92,6 +104,7 @@ export function FriendsTab({
     try {
       await sendFriendRequest(userId, target);
       setInviteInput("");
+      await refresh();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Could not send request.");
     } finally {
@@ -129,19 +142,28 @@ export function FriendsTab({
     }
   };
 
+  const handleWithdraw = async (req: OutgoingRequest) => {
+    try {
+      await withdrawFriendRequest(req.id);
+      setOutgoing((current) => current.filter((item) => item.id !== req.id));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Could not withdraw invite.");
+    }
+  };
+
   const copyId = () => {
     void navigator.clipboard.writeText(userId);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
 
-  if (dbMissing) {
+  if (dbIssueMessage) {
     return (
       <div className="flex flex-col gap-4 py-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-5 text-center">
           <p className="text-xs font-bold text-[var(--ink)]">Friends needs DB setup</p>
           <p className="mt-2 text-[10px] font-bold text-[var(--muted)] leading-5">
-            Add the <code>friend_requests</code> table to your Supabase project to enable friends.
+            {dbIssueMessage}
           </p>
         </div>
       </div>
@@ -173,7 +195,7 @@ export function FriendsTab({
 
       {/* ADD FRIEND */}
       <section>
-        <SectionLabel>Add Friend</SectionLabel>
+        <SectionLabel>Add Friend (Send Invite)</SectionLabel>
         <div className="mt-3 flex items-center gap-2">
           <input
             value={inviteInput}
@@ -199,6 +221,34 @@ export function FriendsTab({
         </div>
       ) : (
         <>
+          {outgoing.length > 0 && (
+            <section>
+              <SectionLabel>Pending Invites</SectionLabel>
+              <div className="mt-3 flex flex-col gap-2">
+                {outgoing.map((req) => (
+                  <div
+                    key={req.id}
+                    className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3"
+                  >
+                    <div className="flex flex-1 flex-col">
+                      <span className="text-xs font-bold text-[var(--ink)]">{req.displayName}</span>
+                      <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+                        Pending
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => void handleWithdraw(req)}
+                      className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-[var(--muted)] transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-500 active:scale-95"
+                      title="Withdraw invite"
+                    >
+                      Withdraw
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {incoming.length > 0 && (
             <section>
               <SectionLabel>Incoming Requests</SectionLabel>
@@ -234,7 +284,7 @@ export function FriendsTab({
             <SectionLabel>Friends ({friends.length})</SectionLabel>
             {friends.length === 0 ? (
               <p className="mt-3 text-xs font-bold text-[var(--muted)]">
-                No friends yet — send an invite above.
+                No friends yet.
               </p>
             ) : (
               <div className="mt-3 flex flex-col gap-2">

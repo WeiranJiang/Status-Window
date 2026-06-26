@@ -1,4 +1,4 @@
-export type AppTab = "log" | "stats" | "friends" | "settings" | "info";
+export type AppTab = "log" | "stats" | "settings";
 export type AuthMode = "signup" | "login";
 export type SessionMode = "stopwatch" | "timer";
 export type ThemeMode = "light" | "dark";
@@ -47,7 +47,6 @@ export interface UserSettings {
 export interface ColorScheme {
   id: string;
   name: string;
-  description: string;
   bg: string;
   paper: string;
   ink: string;

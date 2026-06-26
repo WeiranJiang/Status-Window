@@ -38,7 +38,7 @@ export function getEmailAuthRedirectUrl(): string | undefined {
 }
 
 export function logExtensionRedirectUrl(): void {
-  if (!isChromeExtension()) {
+  if (!isChromeExtension() || !import.meta.env.DEV) {
     return;
   }
 

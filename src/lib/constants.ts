@@ -10,8 +10,7 @@ export const DEFAULT_SUBJECTS = [
 export const COLOR_SCHEMES: ColorScheme[] = [
   {
     id: "soft-blue",
-    name: "Soft Blue",
-    description: "Airy blue paper with crisp, calm contrast.",
+    name: "Frost Blue",
     bg: "#f3f7fc",
     paper: "#ffffff",
     ink: "#1f3147",
@@ -26,8 +25,7 @@ export const COLOR_SCHEMES: ColorScheme[] = [
   },
   {
     id: "sakura-pink",
-    name: "Sakura Pink",
-    description: "Soft blush tones with gentle pink accents.",
+    name: "Soft Pink",
     bg: "#fcf5f8",
     paper: "#fffdfd",
     ink: "#442b39",
@@ -43,7 +41,6 @@ export const COLOR_SCHEMES: ColorScheme[] = [
   {
     id: "mint-green",
     name: "Mint Green",
-    description: "Fresh mint surfaces with grounded green accents.",
     bg: "#f3faf7",
     paper: "#fdfffe",
     ink: "#233e34",
@@ -58,8 +55,7 @@ export const COLOR_SCHEMES: ColorScheme[] = [
   },
   {
     id: "warm-cream",
-    name: "Warm Cream",
-    description: "A cozy desk-lamp palette with warm paper.",
+    name: "Parchment",
     bg: "#f6f1e9",
     paper: "#ffffff",
     ink: "#3a2f26",
@@ -75,7 +71,6 @@ export const COLOR_SCHEMES: ColorScheme[] = [
   {
     id: "lavender",
     name: "Lavender",
-    description: "Lavender paper with soft violet accents.",
     bg: "#f6f3fb",
     paper: "#fefcff",
     ink: "#352d46",
@@ -92,7 +87,7 @@ export const COLOR_SCHEMES: ColorScheme[] = [
 
 export const DEFAULT_SETTINGS: Omit<UserSettings, "id" | "user_id" | "created_at"> = {
   theme: "light",
-  color_scheme: "soft-blue",
+  color_scheme: "warm-cream",
   button_sounds_enabled: true,
   tab_sounds_enabled: true,
   timer_sound_enabled: true,

@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { calculateHP, calculateTotalStudySeconds, formatDurationShort, toLocalDateKey } from "../../lib/stats";
 import { calculateSubjectHours } from "../../lib/radarStats";
 import type { StudySession, Subject } from "../../types";
@@ -33,26 +33,91 @@ function last7DaysSessions(sessions: StudySession[]): { label: string; hours: nu
   return days;
 }
 
+function calculateLongestCheckInStreak(sessions: StudySession[]) {
+  if (sessions.length === 0) {
+    return 0;
+  }
+
+  const dayKeys = Array.from(new Set(sessions.map((session) => toLocalDateKey(session.start_time)))).sort();
+  let longest = 1;
+  let current = 1;
+
+  for (let index = 1; index < dayKeys.length; index += 1) {
+    const [previousYear, previousMonth, previousDay] = dayKeys[index - 1].split("-").map(Number);
+    const [currentYear, currentMonth, currentDay] = dayKeys[index].split("-").map(Number);
+    const previousDate = new Date(previousYear, previousMonth - 1, previousDay);
+    const currentDate = new Date(currentYear, currentMonth - 1, currentDay);
+    const dayDiff = Math.round((currentDate.getTime() - previousDate.getTime()) / 86_400_000);
+
+    if (dayDiff === 1) {
+      current += 1;
+      longest = Math.max(longest, current);
+    } else {
+      current = 1;
+    }
+  }
+
+  return longest;
+}
+
+function getStartOfWeek(date = new Date()) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  return start;
+}
+
 // ── Mini weekly bar chart (pure SVG, no recharts) ─────────────────────────────
 
 function WeeklyBars({ days }: { days: { label: string; hours: number }[] }) {
   const maxH = Math.max(0.01, ...days.map((d) => d.hours));
+  const maxScale = Math.max(1, Math.ceil(maxH));
+  const tickValues = [maxScale, maxScale * (2 / 3), maxScale * (1 / 3), 0];
+  const axisW = 24;
   const barW = 22;
   const gap = 8;
   const chartH = 56;
-  const totalW = days.length * (barW + gap) - gap;
+  const barsW = days.length * (barW + gap) - gap;
+  const totalW = axisW + 8 + barsW;
 
   return (
     <svg
       width={totalW}
-      height={chartH + 18}
-      viewBox={`0 0 ${totalW} ${chartH + 18}`}
+      height={chartH + 22}
+      viewBox={`0 0 ${totalW} ${chartH + 22}`}
       aria-label="Weekly study hours bar chart"
       className="mx-auto"
     >
+      {tickValues.map((tick) => {
+        const y = chartH - (tick / maxScale) * chartH;
+        return (
+          <g key={tick}>
+            <line
+              x1={axisW}
+              y1={y}
+              x2={totalW}
+              y2={y}
+              stroke="var(--border)"
+              strokeWidth={1}
+              opacity={0.65}
+            />
+            <text
+              x={axisW - 4}
+              y={y + 2.5}
+              textAnchor="end"
+              fontSize={6.5}
+              fontWeight={800}
+              fontFamily="inherit"
+              fill="var(--muted)"
+            >
+              {tick === 0 ? "0h" : `${Number(tick.toFixed(1))}h`}
+            </text>
+          </g>
+        );
+      })}
       {days.map((day, i) => {
-        const barH = Math.max(2, (day.hours / maxH) * chartH);
-        const x = i * (barW + gap);
+        const barH = day.hours === 0 ? 0 : Math.max(2, (day.hours / maxScale) * chartH);
+        const x = axisW + 8 + i * (barW + gap);
         const y = chartH - barH;
         return (
           <g key={i}>
@@ -67,7 +132,7 @@ function WeeklyBars({ days }: { days: { label: string; hours: number }[] }) {
             />
             <text
               x={x + barW / 2}
-              y={chartH + 11}
+              y={chartH + 15}
               textAnchor="middle"
               fontSize={7.5}
               fontWeight={800}
@@ -164,7 +229,9 @@ export const StatsTab = memo(function StatsTab({
   const totalSeconds = useMemo(() => calculateTotalStudySeconds(sessions), [sessions]);
   const totalHours = totalSeconds / 3600;
   const hp = useMemo(() => calculateHP(sessions), [sessions]);
+  const longestCheckInStreak = useMemo(() => calculateLongestCheckInStreak(sessions), [sessions]);
   const weeklyDays = useMemo(() => last7DaysSessions(sessions), [sessions]);
+  const [outerRingInput, setOuterRingInput] = useState("");
   const subjectHours = useMemo(
     () => calculateSubjectHours(subjects, sessions),
     [subjects, sessions],
@@ -191,15 +258,31 @@ export const StatsTab = memo(function StatsTab({
   const activeSubjects = useMemo(() => subjects.filter((s) => s.is_active), [subjects]);
   const hasEnoughSubjects = activeSubjects.length >= 3;
   const hasEnoughSelected = radarSubjectIds.length >= 3;
+  const parsedOuterRingHours = Number(outerRingInput);
+  const hasCustomOuterRing =
+    outerRingInput.trim().length > 0 && Number.isFinite(parsedOuterRingHours) && parsedOuterRingHours > 0;
+  const minimumRadarOuterRingHours = useMemo(
+    () => Math.max(1, ...selectedRadarData.map((item) => item.totalHours)),
+    [selectedRadarData],
+  );
+  const radarOuterRingHours = hasCustomOuterRing
+    ? Math.max(parsedOuterRingHours, minimumRadarOuterRingHours)
+    : Math.max(totalHours, minimumRadarOuterRingHours);
 
-  // ─ Recent sessions (latest 20) ─
-  const recentSessions = useMemo(
-    () => [...sessions].sort((a, b) => b.start_time.localeCompare(a.start_time)).slice(0, 20),
+  // ─ Weekly history (latest 20 this week only) ─
+  const weeklyHistorySessions = useMemo(
+    () => {
+      const startOfWeek = getStartOfWeek();
+      return [...sessions]
+        .filter((session) => new Date(session.start_time) >= startOfWeek)
+        .sort((a, b) => b.start_time.localeCompare(a.start_time))
+        .slice(0, 20);
+    },
     [sessions],
   );
 
   return (
-    <div className="flex flex-col gap-8 py-4 pb-24 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="flex flex-col gap-6 py-3 pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500">
 
       {/* ── Primary metrics ── */}
       <section className="grid grid-cols-2 gap-3">
@@ -224,7 +307,7 @@ export const StatsTab = memo(function StatsTab({
             {hp}
           </span>
           <span className="mt-0.5 text-[9px] font-bold text-[var(--muted)]">
-            {hp >= 0 ? "keep it up" : "study today!"}
+            Longest streak: {longestCheckInStreak} {longestCheckInStreak === 1 ? "day" : "days"}
           </span>
         </div>
       </section>
@@ -247,7 +330,41 @@ export const StatsTab = memo(function StatsTab({
           onChange={onChangeRadarIds}
         />
 
-        <div className="mt-3 flex min-h-[200px] items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--paper)] py-4 shadow-sm">
+        <div className="mt-2.5 flex items-end justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 shadow-sm">
+          <div className="flex flex-col">
+            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--muted)]">
+              Outer Ring
+            </span>
+            <span className="mt-1 text-[10px] font-bold text-[var(--muted)]">
+              {hasCustomOuterRing ? "Custom scale" : "Defaults to total hours"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0.1"
+              step="0.1"
+              inputMode="decimal"
+              value={outerRingInput}
+              onChange={(event) => setOuterRingInput(event.target.value)}
+              placeholder={totalHours.toFixed(1)}
+              className="w-20 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-right text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+              aria-label="Radar outer ring hours"
+            />
+            <span className="text-[10px] font-black uppercase tracking-wide text-[var(--muted)]">
+              hours
+            </span>
+            <button
+              type="button"
+              onClick={() => setOuterRingInput("")}
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-[var(--muted)] transition-all hover:bg-[var(--sky-soft)] hover:text-[var(--sky-dark)] active:scale-95"
+            >
+              Auto
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-2 flex min-h-[188px] items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--paper)] py-3 shadow-sm">
           {!hasEnoughSubjects ? (
             <p className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest text-[var(--muted)] opacity-60">
               Add at least 3 subjects to unlock the radar chart
@@ -257,7 +374,7 @@ export const StatsTab = memo(function StatsTab({
               Select at least 3 subjects to show the radar chart
             </p>
           ) : (
-            <SvgRadarChart data={selectedRadarData} size={256} />
+            <SvgRadarChart data={selectedRadarData} outerScaleHours={radarOuterRingHours} size={256} />
           )}
         </div>
       </section>
@@ -284,16 +401,21 @@ export const StatsTab = memo(function StatsTab({
 
       {/* ── Recent sessions ── */}
       <section>
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
-          History
-        </span>
-        {recentSessions.length === 0 ? (
+        <div className="flex items-baseline justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+            History
+          </span>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+            resets weekly
+          </span>
+        </div>
+        {weeklyHistorySessions.length === 0 ? (
           <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-[var(--muted)] opacity-60">
-            No sessions yet — start your first timer!
+            No check-ins this week yet.
           </p>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
-            {recentSessions.map((session) => (
+            {weeklyHistorySessions.map((session) => (
               <SessionItem key={session.id} session={session} />
             ))}
           </div>

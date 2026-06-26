@@ -9,6 +9,7 @@ export interface RadarChartDatum {
 
 interface RadarChartProps {
   data: RadarChartDatum[];
+  outerScaleHours?: number;
   size?: number;
 }
 
@@ -69,7 +70,7 @@ function labelAnchor(angle: number): {
 
 const GRID_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
 
-export function SvgRadarChart({ data, size = 260 }: RadarChartProps) {
+export function SvgRadarChart({ data, outerScaleHours, size = 260 }: RadarChartProps) {
   const n = data.length;
 
   const {
@@ -80,7 +81,7 @@ export function SvgRadarChart({ data, size = 260 }: RadarChartProps) {
     const radius = size * 0.34;
     const labelRadius = size * 0.44;
 
-    const maxHours = Math.max(1, ...data.map((d) => d.totalHours));
+    const maxHours = Math.max(1, outerScaleHours ?? Math.max(1, ...data.map((d) => d.totalHours)));
 
     // Data polygon points
     const points = data.map((d, i) => {
@@ -110,7 +111,7 @@ export function SvgRadarChart({ data, size = 260 }: RadarChartProps) {
 
     return { cx, cy, radius, labelRadius, maxHours, points, gridPolygons, axisLines, labels };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, size, n]);
+  }, [data, outerScaleHours, size, n]);
 
   const dataPolygonStr = points.map((p) => `${p.x},${p.y}`).join(" ");
   const allZero = data.every((d) => d.totalHours === 0);

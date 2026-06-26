@@ -1,4 +1,4 @@
-import { BarChart3, Info, Settings as SettingsIcon, Timer, Users } from "lucide-react";
+import { BarChart3, Settings as SettingsIcon, Timer } from "lucide-react";
 import type { AppTab } from "../../types";
 
 export function AppShell({
@@ -16,18 +16,20 @@ export function AppShell({
   level: number;
   children: React.ReactNode;
 }) {
+  const headerDisplayName = displayName.trim() || "John Smith";
+
   return (
     <div className="relative flex h-[600px] w-[420px] flex-col overflow-hidden bg-[var(--bg)] font-sans selection:bg-[var(--sky-soft)]">
       {/* MINIMAL TOP BAR */}
-      <header className="shrink-0 px-6 pt-4 pb-5">
+      <header className="shrink-0 border-b border-[var(--border)]/70 px-6 pt-4 pb-5">
         <div className="text-center">
           <span className="text-[14px] font-black uppercase tracking-[0.18em] text-[var(--muted)]">Status</span>
         </div>
 
         <div className="mt-4 flex items-start justify-between">
           <div className="flex flex-col">
-            <h1 className="text-lg font-black tracking-tight text-[var(--ink)]">
-              {displayName.split(" ")[0]}
+            <h1 className="max-w-[190px] text-lg font-black tracking-tight text-[var(--ink)]">
+              {headerDisplayName}
             </h1>
           </div>
 
@@ -49,7 +51,7 @@ export function AppShell({
       </header>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto px-6 pb-24 scrollbar-hide">
+      <main className="flex-1 overflow-y-auto px-6 pt-4 pb-24 scrollbar-hide">
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
           {children}
         </div>
@@ -76,15 +78,6 @@ export function AppShell({
           <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Stats</span>
         </button>
         <button
-          onClick={() => onTabChange("friends")}
-          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
-            activeTab === "friends" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
-          }`}
-        >
-          <Users className="h-5 w-5" />
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Friends</span>
-        </button>
-        <button
           onClick={() => onTabChange("settings")}
           className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
             activeTab === "settings" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
@@ -92,15 +85,6 @@ export function AppShell({
         >
           <SettingsIcon className="h-5 w-5" />
           <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Settings</span>
-        </button>
-        <button
-          onClick={() => onTabChange("info")}
-          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
-            activeTab === "info" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
-          }`}
-        >
-          <Info className="h-5 w-5" />
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Info</span>
         </button>
       </nav>
     </div>

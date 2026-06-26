@@ -2,8 +2,6 @@ import type { Session, User } from "@supabase/supabase-js";
 import { LoaderCircle, RotateCw, Settings2 } from "lucide-react";
 import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthScreen } from "./components/Auth/AuthScreen";
-import { FriendsTab } from "./components/Friends/FriendsTab";
-import { InfoTab } from "./components/Info/InfoTab";
 import { AppShell } from "./components/Layout/AppShell";
 import { ToastStack, type ToastItem } from "./components/Layout/ToastStack";
 import { LogTab } from "./components/Log/LogTab";
@@ -32,6 +30,59 @@ import type { AppTab, AuthMode, DashboardCoreData, Subject, StudySession, TimerD
 
 const LazyStatsTab = lazy(() => import("./components/Stats/StatsTab").then(({ StatsTab }) => ({ default: StatsTab })));
 const SETTINGS_CACHE_KEY = "status-window-settings";
+const CORE_CACHE_KEY_PREFIX = "status-window-core-cache:";
+const LOADING_THEME: Omit<UserSettings, "id" | "user_id" | "created_at"> = {
+  ...DEFAULT_SETTINGS,
+  color_scheme: "warm-cream",
+};
+
+function readCoreCache(userId: string): DashboardCoreData | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const cached = window.localStorage.getItem(`${CORE_CACHE_KEY_PREFIX}${userId}`);
+    return cached ? (JSON.parse(cached) as DashboardCoreData) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCoreCache(userId: string, data: DashboardCoreData) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(`${CORE_CACHE_KEY_PREFIX}${userId}`, JSON.stringify(data));
+  } catch {
+    // Ignore cache write failures and keep the live UI responsive.
+  }
+}
+
+function clearCoreCache(userId?: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (userId) {
+      window.localStorage.removeItem(`${CORE_CACHE_KEY_PREFIX}${userId}`);
+      return;
+    }
+
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(CORE_CACHE_KEY_PREFIX)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Ignore cache clear failures.
+  }
+}
+
 const renderInPopupViewport = (content: React.ReactNode) => (
   <div className={isChromeExtension() ? "popup-surface-host" : "dev-preview-shell"}>
     <div className="status-window-popup">{content}</div>
@@ -106,9 +157,7 @@ export default function App() {
   const [sessions, setSessions] = useState<StudySession[] | null>(null);
   const [coreLoading, setCoreLoading] = useState(false);
   const [coreError, setCoreError] = useState<string | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [backgroundSyncing, setBackgroundSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>("log");
   const [timerState, setTimerState] = useState<TimerDisplayState | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -140,10 +189,10 @@ export default function App() {
   }, [activeTab]);
 
   const settings = coreData?.settings ?? {
+    ...LOADING_THEME,
     id: "fallback",
     user_id: currentUser?.id ?? "fallback",
     created_at: new Date().toISOString(),
-    ...DEFAULT_SETTINGS,
   };
 
   const activeColorScheme = useMemo(
@@ -175,7 +224,7 @@ export default function App() {
   }, []);
 
   const loadStatsData = useCallback(
-    async (user: User, options: { force?: boolean; background?: boolean } = {}) => {
+    async (user: User, options: { force?: boolean } = {}) => {
       if (!options.force && sessionsRef.current !== null) {
         return;
       }
@@ -184,14 +233,7 @@ export default function App() {
         return statsLoadPromiseRef.current;
       }
 
-      const shouldShowBackgroundIndicator = Boolean(options.background) && activeTabRef.current !== "stats";
       setStatsError(null);
-
-      if (shouldShowBackgroundIndicator) {
-        setBackgroundSyncing(true);
-      } else {
-        setStatsLoading(true);
-      }
 
       const loadPromise = (async () => {
         try {
@@ -209,9 +251,6 @@ export default function App() {
             setStatsError(error instanceof Error ? error.message : "Unable to sync your stats right now.");
           }
           throw error;
-        } finally {
-          setStatsLoading(false);
-          setBackgroundSyncing(false);
         }
       })();
 
@@ -233,7 +272,7 @@ export default function App() {
       }
 
       if (coreDataRef.current) {
-        setBackgroundSyncing(true);
+        setCoreLoading(false);
       } else {
         setCoreLoading(true);
       }
@@ -257,13 +296,8 @@ export default function App() {
             );
           });
 
+          writeCoreCache(user.id, nextCoreData);
           await syncChromeSettingsCache(nextCoreData.settings);
-
-          if (sessionsRef.current === null) {
-            void loadStatsData(user, { background: true }).catch(() => {
-              // The error is already stored in component state for the UI.
-            });
-          }
         } catch (error) {
           if (currentUserRef.current?.id === user.id) {
             const message = error instanceof Error ? error.message : "Unable to load your dashboard.";
@@ -273,7 +307,6 @@ export default function App() {
           throw error;
         } finally {
           setCoreLoading(false);
-          setBackgroundSyncing(false);
         }
       })();
 
@@ -285,8 +318,18 @@ export default function App() {
 
       return coreLoadPromiseRef.current;
     },
-    [ensureUserInitialized, loadStatsData, syncChromeSettingsCache],
+    [ensureUserInitialized, syncChromeSettingsCache],
   );
+
+  useEffect(() => {
+    if (!currentUser || coreData || coreError || coreLoading) {
+      return;
+    }
+
+    void loadCoreData(currentUser).catch(() => {
+      // The error is already stored in component state for the UI.
+    });
+  }, [coreData, coreError, coreLoading, currentUser, loadCoreData]);
 
   const syncTimer = useCallback(async () => {
     if (!hasChromeRuntime) {
@@ -316,7 +359,7 @@ export default function App() {
 
       if (notice.saved && currentUserRef.current && sessionsRef.current !== null) {
         try {
-          await loadStatsData(currentUserRef.current, { force: true, background: true });
+          await loadStatsData(currentUserRef.current, { force: true });
         } catch {
           // Keep the existing local data visible if background refresh fails.
         }
@@ -374,12 +417,12 @@ export default function App() {
       setAuthLoading(false);
 
       if (!nextSession?.user) {
+        clearCoreCache(previousUserId);
         setCoreData(null);
         setSessions(null);
         setCoreError(null);
         setStatsError(null);
         setCoreLoading(false);
-        setStatsLoading(false);
         coreDataRef.current = null;
         sessionsRef.current = null;
         processedNoticeId.current = null;
@@ -387,6 +430,7 @@ export default function App() {
       }
 
       if (previousUserId && previousUserId !== nextSession.user.id) {
+        clearCoreCache(previousUserId);
         setCoreData(null);
         setSessions(null);
         setCoreError(null);
@@ -394,6 +438,17 @@ export default function App() {
         coreDataRef.current = null;
         sessionsRef.current = null;
         processedNoticeId.current = null;
+      }
+
+      const cachedCoreData = readCoreCache(nextSession.user.id);
+      if (cachedCoreData) {
+        setCoreData(cachedCoreData);
+        coreDataRef.current = cachedCoreData;
+        setRadarSubjectIds((current) =>
+          current.length > 0
+            ? current.filter((subjectId) => cachedCoreData.subjects.some((subject) => subject.id === subjectId && subject.is_active))
+            : cachedCoreData.subjects.filter((subject) => subject.is_active).slice(0, 3).map((subject) => subject.id),
+        );
       }
 
       void loadCoreData(nextSession.user).catch(() => {
@@ -491,6 +546,17 @@ export default function App() {
             throw response.error;
           }
 
+          if (response.data.session) {
+            lastAuthSessionKeyRef.current = null;
+            currentUserRef.current = response.data.session.user;
+            setSession(response.data.session);
+            setCurrentUser(response.data.session.user);
+            setAuthLoading(true);
+            void loadCoreData(response.data.session.user, { force: true }).finally(() => {
+              setAuthLoading(false);
+            });
+          }
+
           const showEasterEgg = Math.random() < 0.4;
           if (!response.data.session) {
             pushToast({
@@ -510,6 +576,17 @@ export default function App() {
           if (response.error) {
             throw response.error;
           }
+
+          if (response.data.session) {
+            lastAuthSessionKeyRef.current = null;
+            currentUserRef.current = response.data.session.user;
+            setSession(response.data.session);
+            setCurrentUser(response.data.session.user);
+            setAuthLoading(true);
+            void loadCoreData(response.data.session.user, { force: true }).finally(() => {
+              setAuthLoading(false);
+            });
+          }
         }
       } catch (error) {
         setAuthError(error instanceof Error ? error.message : "Authentication failed.");
@@ -525,7 +602,19 @@ export default function App() {
     setAuthError(null);
 
     try {
-      await signInWithGoogle();
+      const sessionData = await signInWithGoogle();
+      const nextSession = sessionData && "session" in sessionData ? sessionData.session : null;
+
+      if (nextSession) {
+        lastAuthSessionKeyRef.current = null;
+        currentUserRef.current = nextSession.user;
+        setSession(nextSession);
+        setCurrentUser(nextSession.user);
+        setAuthLoading(true);
+        void loadCoreData(nextSession.user, { force: true }).finally(() => {
+          setAuthLoading(false);
+        });
+      }
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Google sign-in failed.");
     } finally {
@@ -736,6 +825,7 @@ export default function App() {
   }, []);
 
   const handleLogout = useCallback(async () => {
+    clearCoreCache(currentUserRef.current?.id);
     await supabase.auth.signOut();
     setCoreData(null);
     setSessions(null);
@@ -765,10 +855,24 @@ export default function App() {
 
   if (authLoading) {
     return renderInPopupViewport(
-      <div className="status-window-shell sw-shell flex min-h-[600px] items-center justify-center">
-        <div className="flex items-center gap-3 text-[var(--ink-soft)]">
-          <LoaderCircle className="h-5 w-5 animate-spin" />
-          Loading Status Window...
+      <div className="status-window-shell sw-shell p-4">
+        <div className="flex h-full flex-col gap-3">
+          <section className="sw-card p-4">
+            <div className="animate-pulse">
+              <div className="sw-skeleton h-4 w-28" />
+              <div className="sw-skeleton mt-3 h-7 w-44" />
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="sw-skeleton h-20" />
+                <div className="sw-skeleton h-20" />
+              </div>
+              <div className="sw-skeleton mt-3 h-12" />
+              <div className="sw-skeleton mt-3 h-11" />
+            </div>
+          </section>
+          <div className="flex items-center justify-center gap-2 text-sm text-[var(--ink-soft)]">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            Syncing your workspace...
+          </div>
         </div>
       </div>,
     );
@@ -790,7 +894,7 @@ export default function App() {
     );
   }
 
-  const displayName = coreData?.profile?.display_name || currentUser.email || "Study Hero";
+  const displayName = coreData?.profile?.display_name || currentUser.email || "John Smith";
   const subjects = coreData?.subjects ?? [];
   const totalStudySeconds = sessions ? calculateTotalStudySeconds(sessions) : 0;
   const hp = sessions ? calculateHP(sessions) : 0;
@@ -850,7 +954,7 @@ export default function App() {
         {coreData && activeTab === "stats" && sessions === null && !statsError ? (
           <PanelLoadingState
             label="Loading your stats"
-            description="The Log tab is ready. History and charts are syncing in the background now."
+            description="Your Log tab is ready. Open stats once and we’ll pull in history and charts."
           />
         ) : null}
 
@@ -884,15 +988,6 @@ export default function App() {
             />
           </Suspense>
         ) : null}
-
-        {coreData && activeTab === "friends" ? (
-          <FriendsTab
-            userId={currentUser.id}
-            onError={(msg) => pushToast({ tone: "error", title: "Friends", description: msg })}
-          />
-        ) : null}
-
-        {activeTab === "info" ? <InfoTab /> : null}
 
         {coreData && activeTab === "settings" ? (
           <SettingsTab

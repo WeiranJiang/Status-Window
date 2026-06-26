@@ -151,8 +151,7 @@ using (
   id = auth.uid()
   or exists (
     select 1 from public.friend_requests r
-    where r.status = 'accepted'
-      and ((r.from_user_id = auth.uid() and r.to_user_id = profiles.id)
+    where ((r.from_user_id = auth.uid() and r.to_user_id = profiles.id)
         or (r.to_user_id = auth.uid() and r.from_user_id = profiles.id))
   )
 );
