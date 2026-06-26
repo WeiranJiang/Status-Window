@@ -25,6 +25,7 @@ export function AppShell({
         <div className="text-center">
           <span className="text-[14px] font-black uppercase tracking-[0.18em] text-[var(--muted)]">Status</span>
         </div>
+        <div className="mt-3 border-t border-[var(--border)]/70" />
 
         <div className="mt-4 flex items-start justify-between">
           <div className="flex flex-col">

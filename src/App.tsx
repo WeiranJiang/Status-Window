@@ -9,7 +9,7 @@ import { ToastStack, type ToastItem } from "./components/Layout/ToastStack";
 import { LogTab } from "./components/Log/LogTab";
 import { SettingsTab } from "./components/Settings/SettingsTab";
 import { acknowledgeTimerNotice, getTimerState, hasChromeRuntime, pauseTimer, resumeTimer, setFloatingMode, startTimer, stopTimer } from "./lib/chrome";
-import { calculateChallengePenalty, deleteChallenge, loadChallenges, upsertChallenge } from "./lib/challenges";
+import { calculateChallengePenalty, deleteChallenge, loadChallenges, setChallengePaused, upsertChallenge } from "./lib/challenges";
 import { signInWithGoogle } from "./lib/auth";
 import { COLOR_SCHEMES, DEFAULT_SETTINGS, MINIMUM_CONFIRM_SAVE_SECONDS } from "./lib/constants";
 import { playSound } from "./lib/sounds";
@@ -863,10 +863,12 @@ export default function App() {
       subjectId,
       dailyTargetMinutes,
       hpPenalty,
+      deadlineDate,
     }: {
       subjectId: string;
       dailyTargetMinutes: number;
       hpPenalty: number;
+      deadlineDate: string | null;
     }) => {
       const user = currentUserRef.current;
       if (!user) {
@@ -877,12 +879,13 @@ export default function App() {
         subject_id: subjectId,
         daily_target_minutes: dailyTargetMinutes,
         hp_penalty: hpPenalty,
+        deadline_date: deadlineDate,
       });
       setChallenges(next);
       pushToast({
         tone: "success",
         title: "Challenge saved",
-        description: "Daily target and HP loss updated.",
+        description: "Daily target, HP loss, and deadline updated.",
       });
     },
     [pushToast],
@@ -900,6 +903,23 @@ export default function App() {
       pushToast({
         tone: "neutral",
         title: "Challenge removed",
+      });
+    },
+    [pushToast],
+  );
+
+  const handleToggleChallengePaused = useCallback(
+    async (challengeId: string, paused: boolean) => {
+      const user = currentUserRef.current;
+      if (!user) {
+        return;
+      }
+
+      const next = await setChallengePaused(user.id, challengeId, paused);
+      setChallenges(next);
+      pushToast({
+        tone: "neutral",
+        title: paused ? "Challenge paused" : "Challenge resumed",
       });
     },
     [pushToast],
@@ -1062,6 +1082,7 @@ export default function App() {
               onChangeRadarIds={setRadarSubjectIds}
               onSaveChallenge={handleSaveChallenge}
               onDeleteChallenge={handleDeleteChallenge}
+              onToggleChallengePaused={handleToggleChallengePaused}
             />
           </Suspense>
         ) : null}

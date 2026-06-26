@@ -16,6 +16,24 @@ function sanitizePositiveInt(value: number, fallback: number) {
   return Math.max(1, Math.round(value));
 }
 
+function sanitizeDeadlineDate(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed && /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+function parseLocalDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function normalizeChallenge(challenge: StudyChallenge) {
+  return {
+    ...challenge,
+    deadline_date: sanitizeDeadlineDate(challenge.deadline_date),
+    is_paused: Boolean(challenge.is_paused),
+  };
+}
+
 export async function loadChallenges(userId: string) {
   const raw = await getStorageItem(getChallengesStorageKey(userId));
   if (!raw) {
@@ -24,7 +42,7 @@ export async function loadChallenges(userId: string) {
 
   try {
     const parsed = JSON.parse(raw) as StudyChallenge[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map((challenge) => normalizeChallenge(challenge)) : [];
   } catch {
     return [];
   }
@@ -36,6 +54,7 @@ export async function upsertChallenge(
     subject_id: string;
     daily_target_minutes: number;
     hp_penalty: number;
+    deadline_date?: string | null;
   },
 ) {
   const current = await loadChallenges(userId);
@@ -46,6 +65,8 @@ export async function upsertChallenge(
         ...existing,
         daily_target_minutes: sanitizePositiveInt(payload.daily_target_minutes, existing.daily_target_minutes),
         hp_penalty: sanitizePositiveInt(payload.hp_penalty, existing.hp_penalty),
+        deadline_date: sanitizeDeadlineDate(payload.deadline_date) ?? null,
+        is_paused: Boolean(existing.is_paused),
       }
     : {
         id: crypto.randomUUID(),
@@ -53,6 +74,8 @@ export async function upsertChallenge(
         subject_id: payload.subject_id,
         daily_target_minutes: sanitizePositiveInt(payload.daily_target_minutes, 60),
         hp_penalty: sanitizePositiveInt(payload.hp_penalty, 1),
+        deadline_date: sanitizeDeadlineDate(payload.deadline_date) ?? null,
+        is_paused: false,
         created_at: new Date().toISOString(),
       };
 
@@ -67,6 +90,20 @@ export async function upsertChallenge(
 export async function deleteChallenge(userId: string, challengeId: string) {
   const current = await loadChallenges(userId);
   const next = current.filter((challenge) => challenge.id !== challengeId);
+  await setStorageItem(getChallengesStorageKey(userId), JSON.stringify(next));
+  return next;
+}
+
+export async function setChallengePaused(userId: string, challengeId: string, isPaused: boolean) {
+  const current = await loadChallenges(userId);
+  const next = current.map((challenge) =>
+    challenge.id === challengeId
+      ? {
+          ...challenge,
+          is_paused: isPaused,
+        }
+      : challenge,
+  );
   await setStorageItem(getChallengesStorageKey(userId), JSON.stringify(next));
   return next;
 }
@@ -95,12 +132,27 @@ export function calculateChallengePenalty(sessions: StudySession[], challenges: 
   lastCompletedDay.setDate(lastCompletedDay.getDate() - 1);
 
   const breakdown = challenges.map((challenge) => {
+    if (challenge.is_paused) {
+      return {
+        challengeId: challenge.id,
+        subjectId: challenge.subject_id,
+        missedDays: 0,
+        totalPenalty: 0,
+      };
+    }
+
     const startDay = new Date(challenge.created_at);
     startDay.setHours(0, 0, 0, 0);
 
+    const deadlineDay = challenge.deadline_date ? parseLocalDateKey(challenge.deadline_date) : null;
+    const penaltyEndDay =
+      deadlineDay && deadlineDay < lastCompletedDay
+        ? deadlineDay
+        : lastCompletedDay;
+
     let missedDays = 0;
     const cursor = new Date(startDay);
-    while (cursor <= lastCompletedDay) {
+    while (cursor <= penaltyEndDay) {
       const key = `${challenge.subject_id}:${toLocalDateKey(cursor.toISOString())}`;
       const studiedSeconds = subjectDaySeconds.get(key) ?? 0;
       if (studiedSeconds < challenge.daily_target_minutes * 60) {
@@ -136,11 +188,24 @@ export function getChallengeTodayStatus(
   const studiedMinutes = Math.floor(studiedSeconds / 60);
   const remainingMinutes = Math.max(challenge.daily_target_minutes - studiedMinutes, 0);
   const completed = remainingMinutes === 0;
+  const expired = Boolean(challenge.deadline_date && todayKey > challenge.deadline_date);
+  const paused = challenge.is_paused;
+  const status = paused
+    ? "paused"
+    : expired
+      ? "expired"
+      : completed
+        ? "completed"
+        : "not_yet";
 
   return {
+    status,
     completed,
+    paused,
+    expired,
     studiedMinutes,
     remainingMinutes,
     targetMinutes: challenge.daily_target_minutes,
+    deadlineDate: challenge.deadline_date,
   };
 }

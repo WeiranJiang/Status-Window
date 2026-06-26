@@ -118,6 +118,8 @@ export interface StudyChallenge {
   subject_id: string;
   daily_target_minutes: number;
   hp_penalty: number;
+  deadline_date: string | null;
+  is_paused: boolean;
   created_at: string;
 }
 

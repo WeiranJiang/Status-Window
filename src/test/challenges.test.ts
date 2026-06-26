@@ -20,6 +20,8 @@ const makeChallenge = (overrides: Partial<StudyChallenge>): StudyChallenge => ({
   subject_id: "subject-1",
   daily_target_minutes: 30,
   hp_penalty: 2,
+  deadline_date: null,
+  is_paused: false,
   created_at: "2026-06-20T09:00:00.000Z",
   ...overrides,
 });
@@ -91,10 +93,57 @@ describe("challenge penalties", () => {
     );
 
     expect(completed).toMatchObject({
+      status: "completed",
       completed: true,
       studiedMinutes: 50,
       remainingMinutes: 0,
       targetMinutes: 45,
     });
+  });
+
+  it("does not apply penalties while a challenge is paused", () => {
+    const sessions = [
+      makeSession({
+        start_time: "2026-06-20T12:00:00.000Z",
+        duration_seconds: 10 * 60,
+      }),
+    ];
+
+    const challenge = makeChallenge({
+      is_paused: true,
+    });
+
+    const result = calculateChallengePenalty(sessions, [challenge], new Date("2026-06-22T18:00:00.000Z"));
+    expect(result.totalPenalty).toBe(0);
+    expect(result.breakdown[0]).toMatchObject({
+      missedDays: 0,
+      totalPenalty: 0,
+    });
+
+    const todayStatus = getChallengeTodayStatus(sessions, challenge, new Date("2026-06-20T18:00:00.000Z"));
+    expect(todayStatus.status).toBe("paused");
+  });
+
+  it("stops counting missed days after the deadline passes", () => {
+    const sessions = [
+      makeSession({
+        start_time: "2026-06-20T12:00:00.000Z",
+        duration_seconds: 10 * 60,
+      }),
+    ];
+
+    const challenge = makeChallenge({
+      deadline_date: "2026-06-21",
+    });
+
+    const result = calculateChallengePenalty(sessions, [challenge], new Date("2026-06-24T18:00:00.000Z"));
+    expect(result.totalPenalty).toBe(4);
+    expect(result.breakdown[0]).toMatchObject({
+      missedDays: 2,
+      totalPenalty: 4,
+    });
+
+    const afterDeadlineStatus = getChallengeTodayStatus(sessions, challenge, new Date("2026-06-22T18:00:00.000Z"));
+    expect(afterDeadlineStatus.status).toBe("expired");
   });
 });

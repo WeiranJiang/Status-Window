@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Pause, Play, Trash2 } from "lucide-react";
 import { calculateChallengePenalty, getChallengeTodayStatus } from "../../lib/challenges";
 import { calculateHP, calculateTotalStudySeconds, formatDurationShort, toLocalDateKey } from "../../lib/stats";
 import { calculateSubjectHours } from "../../lib/radarStats";
@@ -17,8 +17,9 @@ interface StatsTabProps {
   challengePenalty: number;
   radarSubjectIds: string[];
   onChangeRadarIds: (ids: string[]) => void;
-  onSaveChallenge: (payload: { subjectId: string; dailyTargetMinutes: number; hpPenalty: number }) => Promise<void>;
+  onSaveChallenge: (payload: { subjectId: string; dailyTargetMinutes: number; hpPenalty: number; deadlineDate: string | null }) => Promise<void>;
   onDeleteChallenge: (challengeId: string) => Promise<void>;
+  onToggleChallengePaused: (challengeId: string, paused: boolean) => Promise<void>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -251,6 +252,7 @@ export const StatsTab = memo(function StatsTab({
   onChangeRadarIds,
   onSaveChallenge,
   onDeleteChallenge,
+  onToggleChallengePaused,
 }: StatsTabProps) {
   // ─ Aggregate metrics ─
   const totalSeconds = useMemo(() => calculateTotalStudySeconds(sessions), [sessions]);
@@ -262,6 +264,7 @@ export const StatsTab = memo(function StatsTab({
   const [selectedChallengeSubjectId, setSelectedChallengeSubjectId] = useState("");
   const [dailyTargetInput, setDailyTargetInput] = useState("60");
   const [hpPenaltyInput, setHpPenaltyInput] = useState("1");
+  const [deadlineInput, setDeadlineInput] = useState("");
   const subjectHours = useMemo(
     () => calculateSubjectHours(subjects, sessions),
     [subjects, sessions],
@@ -338,6 +341,7 @@ export const StatsTab = memo(function StatsTab({
     const existing = challengeBySubjectId.get(selectedChallengeSubjectId);
     setDailyTargetInput(existing ? String(existing.daily_target_minutes) : "60");
     setHpPenaltyInput(existing ? String(existing.hp_penalty) : "1");
+    setDeadlineInput(existing?.deadline_date ?? "");
   }, [selectedChallengeSubjectId, challengeBySubjectId]);
 
   return (
@@ -521,6 +525,17 @@ export const StatsTab = memo(function StatsTab({
                     />
                   </label>
                 </div>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+                    Deadline
+                  </span>
+                  <input
+                    type="date"
+                    value={deadlineInput}
+                    onChange={(event) => setDeadlineInput(event.target.value)}
+                    className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                  />
+                </label>
               </div>
 
               <button
@@ -537,6 +552,7 @@ export const StatsTab = memo(function StatsTab({
                     subjectId: selectedChallengeSubjectId,
                     dailyTargetMinutes,
                     hpPenalty: hpLoss,
+                    deadlineDate: deadlineInput.trim() || null,
                   });
                 }}
                 className="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--sky)] px-4 text-[10px] font-black uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[var(--sky-dark)] active:scale-95"
@@ -556,6 +572,13 @@ export const StatsTab = memo(function StatsTab({
             {challenges.map((challenge) => {
               const subject = activeSubjects.find((item) => item.id === challenge.subject_id) ?? subjects.find((item) => item.id === challenge.subject_id);
               const summary = challengeSummary.breakdown.find((item) => item.challengeId === challenge.id);
+              const deadlineLabel = challenge.deadline_date
+                ? new Intl.DateTimeFormat(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  }).format(new Date(`${challenge.deadline_date}T12:00:00`))
+                : "No deadline";
 
               return (
                 <div
@@ -569,20 +592,60 @@ export const StatsTab = memo(function StatsTab({
                     <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
                       {challenge.daily_target_minutes} min daily · -{challenge.hp_penalty} HP each miss
                     </span>
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                      {challenge.is_paused ? "Paused" : "Active"} · {deadlineLabel}
+                    </span>
                     {(() => {
                       const todayStatus = getChallengeTodayStatus(sessions, challenge);
+                      const statusTone = todayStatus.status === "completed"
+                        ? {
+                            backgroundColor: "var(--sky-soft)",
+                            textColor: "var(--sky-dark)",
+                            detailColor: "var(--ink-soft)",
+                          }
+                        : todayStatus.status === "paused"
+                          ? {
+                              backgroundColor: "color-mix(in srgb, var(--ink-soft) 10%, var(--paper))",
+                              textColor: "var(--ink-soft)",
+                              detailColor: "var(--ink-soft)",
+                            }
+                          : todayStatus.status === "expired"
+                            ? {
+                                backgroundColor: "color-mix(in srgb, var(--muted) 16%, var(--paper))",
+                                textColor: "var(--muted)",
+                                detailColor: "var(--muted)",
+                              }
+                            : {
+                            backgroundColor: "color-mix(in srgb, var(--danger) 12%, var(--paper))",
+                            textColor: "var(--danger)",
+                            detailColor: "var(--danger)",
+                          };
+                      const statusLabel =
+                        todayStatus.status === "completed"
+                          ? "Completed today"
+                          : todayStatus.status === "paused"
+                            ? "Paused"
+                            : todayStatus.status === "expired"
+                              ? "Deadline passed"
+                              : "Not yet";
+
                       return (
-                        <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-[var(--sky-soft)] px-3 py-2">
+                        <div
+                          className="mt-1 flex items-center justify-between gap-3 rounded-xl px-3 py-2"
+                          style={{ backgroundColor: statusTone.backgroundColor }}
+                        >
                           <span
-                            className={`text-[9px] font-black uppercase tracking-wide ${
-                              todayStatus.completed ? "text-[var(--leaf)]" : "text-[var(--sky-dark)]"
-                            }`}
+                            className="text-[9px] font-black uppercase tracking-wide"
+                            style={{ color: statusTone.textColor }}
                           >
-                            {todayStatus.completed ? "Completed today" : "Not yet"}
+                            {statusLabel}
                           </span>
-                          <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wide"
+                            style={{ color: statusTone.detailColor }}
+                          >
                             {todayStatus.studiedMinutes}/{todayStatus.targetMinutes} min
-                            {!todayStatus.completed ? ` · ${todayStatus.remainingMinutes} min left` : ""}
+                            {todayStatus.status === "not_yet" ? ` · ${todayStatus.remainingMinutes} min left` : ""}
                           </span>
                         </div>
                       );
@@ -591,14 +654,24 @@ export const StatsTab = memo(function StatsTab({
                       Missed days: {summary?.missedDays ?? 0} · Total loss: -{summary?.totalPenalty ?? 0} HP
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void onDeleteChallenge(challenge.id)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] transition-all hover:bg-red-50 hover:text-red-500 active:scale-95"
-                    title="Delete challenge"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void onToggleChallengePaused(challenge.id, !challenge.is_paused)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition-all hover:bg-[var(--sky-soft)] hover:text-[var(--sky-dark)] active:scale-95"
+                      title={challenge.is_paused ? "Resume challenge" : "Pause challenge"}
+                    >
+                      {challenge.is_paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onDeleteChallenge(challenge.id)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted)] transition-all hover:bg-red-50 hover:text-red-500 active:scale-95"
+                      title="Delete challenge"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
