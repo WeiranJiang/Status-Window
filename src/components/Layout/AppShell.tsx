@@ -1,4 +1,4 @@
-import { BarChart3, Settings as SettingsIcon, Timer } from "lucide-react";
+import { BarChart3, CircleHelp, Settings as SettingsIcon, Timer, Users } from "lucide-react";
 import type { AppTab } from "../../types";
 
 export function AppShell({
@@ -61,30 +61,48 @@ export function AppShell({
       <nav className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-2xl border border-[var(--border)] bg-[var(--paper)]/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
         <button
           onClick={() => onTabChange("log")}
-          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+          className={`flex h-12 w-12 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
             activeTab === "log" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
           }`}
         >
           <Timer className="h-5 w-5" />
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Start</span>
+          <span className="mt-1 text-[8px] font-bold uppercase tracking-wider">Log</span>
         </button>
         <button
           onClick={() => onTabChange("stats")}
-          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+          className={`flex h-12 w-12 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
             activeTab === "stats" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
           }`}
         >
           <BarChart3 className="h-5 w-5" />
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Stats</span>
+          <span className="mt-1 text-[8px] font-bold uppercase tracking-wider">Stats</span>
+        </button>
+        <button
+          onClick={() => onTabChange("friends")}
+          className={`flex h-12 w-12 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+            activeTab === "friends" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
+          }`}
+        >
+          <Users className="h-5 w-5" />
+          <span className="mt-1 text-[8px] font-bold uppercase tracking-wider">Friends</span>
+        </button>
+        <button
+          onClick={() => onTabChange("info")}
+          className={`flex h-12 w-12 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+            activeTab === "info" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
+          }`}
+        >
+          <CircleHelp className="h-5 w-5" />
+          <span className="mt-1 text-[8px] font-bold uppercase tracking-wider">Info</span>
         </button>
         <button
           onClick={() => onTabChange("settings")}
-          className={`flex h-12 w-14 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
+          className={`flex h-12 w-12 flex-col items-center justify-center rounded-xl transition-all duration-200 ${
             activeTab === "settings" ? "bg-[var(--sky)] text-white shadow-inner" : "text-[var(--muted)] hover:text-[var(--ink)] hover:bg-black/5"
           }`}
         >
           <SettingsIcon className="h-5 w-5" />
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider">Settings</span>
+          <span className="mt-1 text-[8px] font-bold uppercase tracking-wider">Settings</span>
         </button>
       </nav>
     </div>

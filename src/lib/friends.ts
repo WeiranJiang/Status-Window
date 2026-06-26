@@ -1,3 +1,5 @@
+import type { User } from "@supabase/supabase-js";
+import { getEmailAuthRedirectUrl } from "./authRedirect";
 import { supabase } from "./supabaseClient";
 
 export type FriendRequestStatus = "pending" | "accepted" | "declined";
@@ -17,6 +19,12 @@ export interface FriendProfile {
   isOnline: boolean;    // true if a timer is currently active
 }
 
+export interface EmailInvite {
+  id: string;
+  toEmail: string;
+  createdAt: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const todayUtcStart = () => {
@@ -29,6 +37,8 @@ const formatFriendName = (displayName: string | null | undefined) => {
   const trimmed = displayName?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : "Unknown user";
 };
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 // ── Friend requests ────────────────────────────────────────────────────────
 
@@ -70,6 +80,71 @@ export const sendFriendRequest = async (fromUserId: string, toUserId: string): P
   if (error) throw new Error(error.message);
 };
 
+/** Send a friend invite to an email address and email them a magic link. */
+export const sendFriendInviteByEmail = async (
+  fromUserId: string,
+  fromUserEmail: string | null | undefined,
+  rawEmail: string,
+): Promise<void> => {
+  const toEmail = normalizeEmail(rawEmail);
+  const ownEmail = normalizeEmail(fromUserEmail ?? "");
+
+  if (!toEmail) {
+    throw new Error("Enter an email address first.");
+  }
+
+  if (ownEmail && toEmail === ownEmail) {
+    throw new Error("You can't invite your own email.");
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("friend_email_invites")
+    .select("id, status")
+    .eq("from_user_id", fromUserId)
+    .eq("to_email", toEmail)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
+  if (existing) {
+    throw new Error("An email invite is already pending for that address.");
+  }
+
+  const { data: insertedInvite, error: insertError } = await supabase
+    .from("friend_email_invites")
+    .insert({
+      from_user_id: fromUserId,
+      to_email: toEmail,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+
+  const emailRedirectTo = getEmailAuthRedirectUrl();
+  const { error: otpError } = await supabase.auth.signInWithOtp({
+    email: toEmail,
+    options: {
+      shouldCreateUser: true,
+      data: {
+        invite_from_user_id: fromUserId,
+      },
+      ...(emailRedirectTo ? { emailRedirectTo } : {}),
+    },
+  });
+
+  if (otpError) {
+    await supabase.from("friend_email_invites").delete().eq("id", insertedInvite.id);
+    throw new Error(otpError.message);
+  }
+};
+
 /** Accept a pending request. */
 export const acceptFriendRequest = async (requestId: string): Promise<void> => {
   const { error } = await supabase
@@ -105,6 +180,15 @@ export const withdrawFriendRequest = async (requestId: string): Promise<void> =>
   await removeFriend(requestId);
 };
 
+export const withdrawEmailInvite = async (inviteId: string): Promise<void> => {
+  const { error } = await supabase
+    .from("friend_email_invites")
+    .delete()
+    .eq("id", inviteId);
+
+  if (error) throw new Error(error.message);
+};
+
 // ── Loading ────────────────────────────────────────────────────────────────
 
 export interface IncomingRequest {
@@ -118,6 +202,113 @@ export interface OutgoingRequest {
   toUserId: string;
   displayName: string;
 }
+
+export const loadOutgoingEmailInvites = async (userId: string): Promise<EmailInvite[]> => {
+  const { data, error } = await supabase
+    .from("friend_email_invites")
+    .select("id, to_email, created_at")
+    .eq("from_user_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return ((data as Array<{ id: string; to_email: string; created_at: string }>) ?? []).map((invite) => ({
+    id: invite.id,
+    toEmail: invite.to_email,
+    createdAt: invite.created_at,
+  }));
+};
+
+export const claimEmailFriendInvites = async (user: User): Promise<number> => {
+  const normalizedEmail = normalizeEmail(user.email ?? "");
+  if (!normalizedEmail) {
+    return 0;
+  }
+
+  const { data: invites, error: invitesError } = await supabase
+    .from("friend_email_invites")
+    .select("id, from_user_id")
+    .eq("to_email", normalizedEmail)
+    .eq("status", "pending");
+
+  if (invitesError) {
+    throw new Error(invitesError.message);
+  }
+
+  const rows = (invites as Array<{ id: string; from_user_id: string }>) ?? [];
+  let claimedCount = 0;
+
+  for (const invite of rows) {
+    if (invite.from_user_id === user.id) {
+      await supabase
+        .from("friend_email_invites")
+        .update({
+          status: "claimed",
+          claimed_by_user_id: user.id,
+          claimed_at: new Date().toISOString(),
+        })
+        .eq("id", invite.id);
+      continue;
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("friend_requests")
+      .select("id, status")
+      .or(
+        `and(from_user_id.eq.${invite.from_user_id},to_user_id.eq.${user.id}),and(from_user_id.eq.${user.id},to_user_id.eq.${invite.from_user_id})`,
+      )
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    if (!existing) {
+      const { error: insertError } = await supabase
+        .from("friend_requests")
+        .insert({
+          from_user_id: invite.from_user_id,
+          to_user_id: user.id,
+          status: "pending",
+        });
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+    } else if (existing.status === "declined") {
+      const { error: updateError } = await supabase
+        .from("friend_requests")
+        .update({
+          status: "pending",
+          from_user_id: invite.from_user_id,
+          to_user_id: user.id,
+        })
+        .eq("id", existing.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+    }
+
+    const { error: claimError } = await supabase
+      .from("friend_email_invites")
+      .update({
+        status: "claimed",
+        claimed_by_user_id: user.id,
+        claimed_at: new Date().toISOString(),
+      })
+      .eq("id", invite.id);
+
+    if (claimError) {
+      throw new Error(claimError.message);
+    }
+
+    claimedCount += 1;
+  }
+
+  return claimedCount;
+};
 
 /** Load pending requests directed at the current user. */
 export const loadIncomingRequests = async (userId: string): Promise<IncomingRequest[]> => {

@@ -2,13 +2,17 @@ import type { Session, User } from "@supabase/supabase-js";
 import { LoaderCircle, RotateCw, Settings2 } from "lucide-react";
 import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthScreen } from "./components/Auth/AuthScreen";
+import { FriendsTab } from "./components/Friends/FriendsTab";
+import { InfoTab } from "./components/Info/InfoTab";
 import { AppShell } from "./components/Layout/AppShell";
 import { ToastStack, type ToastItem } from "./components/Layout/ToastStack";
 import { LogTab } from "./components/Log/LogTab";
 import { SettingsTab } from "./components/Settings/SettingsTab";
 import { acknowledgeTimerNotice, getTimerState, hasChromeRuntime, pauseTimer, resumeTimer, setFloatingMode, startTimer, stopTimer } from "./lib/chrome";
+import { calculateChallengePenalty, deleteChallenge, loadChallenges, upsertChallenge } from "./lib/challenges";
 import { signInWithGoogle } from "./lib/auth";
 import { COLOR_SCHEMES, DEFAULT_SETTINGS, MINIMUM_CONFIRM_SAVE_SECONDS } from "./lib/constants";
+import { claimEmailFriendInvites } from "./lib/friends";
 import { playSound } from "./lib/sounds";
 import {
   archiveSubject,
@@ -26,7 +30,7 @@ import {
 import { calculateHP, calculateLevel, calculateTotalStudySeconds, formatDurationShort } from "./lib/stats";
 import { isChromeExtension } from "./lib/authRedirect";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
-import type { AppTab, AuthMode, DashboardCoreData, Subject, StudySession, TimerDisplayState, UserSettings } from "./types";
+import type { AppTab, AuthMode, DashboardCoreData, StudyChallenge, Subject, StudySession, TimerDisplayState, UserSettings } from "./types";
 
 const LazyStatsTab = lazy(() => import("./components/Stats/StatsTab").then(({ StatsTab }) => ({ default: StatsTab })));
 const SETTINGS_CACHE_KEY = "status-window-settings";
@@ -155,6 +159,7 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [coreData, setCoreData] = useState<DashboardCoreData | null>(null);
   const [sessions, setSessions] = useState<StudySession[] | null>(null);
+  const [challenges, setChallenges] = useState<StudyChallenge[]>([]);
   const [coreLoading, setCoreLoading] = useState(false);
   const [coreError, setCoreError] = useState<string | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -188,6 +193,24 @@ export default function App() {
     activeTabRef.current = activeTab;
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setChallenges([]);
+      return;
+    }
+
+    let active = true;
+    void loadChallenges(currentUser.id).then((nextChallenges) => {
+      if (active) {
+        setChallenges(nextChallenges);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id]);
+
   const settings = coreData?.settings ?? {
     ...LOADING_THEME,
     id: "fallback",
@@ -207,6 +230,37 @@ export default function App() {
       setToasts((current) => current.filter((item) => item.id !== nextToast.id));
     }, 4200);
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id || !currentUser.email) {
+      return;
+    }
+
+    let active = true;
+
+    void claimEmailFriendInvites(currentUser)
+      .then((claimedCount) => {
+        if (!active || claimedCount === 0) {
+          return;
+        }
+
+        pushToast({
+          tone: "success",
+          title: claimedCount === 1 ? "Friend invite arrived" : "Friend invites arrived",
+          description:
+            claimedCount === 1
+              ? "A friend request is waiting for you in Friends."
+              : `${claimedCount} friend requests are waiting for you in Friends.`,
+        });
+      })
+      .catch(() => {
+        // Keep auth flow resilient even if invite claiming fails.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser, pushToast]);
 
   const syncChromeSettingsCache = useCallback(async (nextSettings: UserSettings) => {
     if (globalThis.chrome?.storage?.local) {
@@ -829,11 +883,59 @@ export default function App() {
     await supabase.auth.signOut();
     setCoreData(null);
     setSessions(null);
+    setChallenges([]);
     setCoreError(null);
     setTimerState(null);
     setStatsError(null);
     processedNoticeId.current = null;
   }, []);
+
+  const handleSaveChallenge = useCallback(
+    async ({
+      subjectId,
+      dailyTargetMinutes,
+      hpPenalty,
+    }: {
+      subjectId: string;
+      dailyTargetMinutes: number;
+      hpPenalty: number;
+    }) => {
+      const user = currentUserRef.current;
+      if (!user) {
+        return;
+      }
+
+      const next = await upsertChallenge(user.id, {
+        subject_id: subjectId,
+        daily_target_minutes: dailyTargetMinutes,
+        hp_penalty: hpPenalty,
+      });
+      setChallenges(next);
+      pushToast({
+        tone: "success",
+        title: "Challenge saved",
+        description: "Daily target and HP loss updated.",
+      });
+    },
+    [pushToast],
+  );
+
+  const handleDeleteChallenge = useCallback(
+    async (challengeId: string) => {
+      const user = currentUserRef.current;
+      if (!user) {
+        return;
+      }
+
+      const next = await deleteChallenge(user.id, challengeId);
+      setChallenges(next);
+      pushToast({
+        tone: "neutral",
+        title: "Challenge removed",
+      });
+    },
+    [pushToast],
+  );
 
   if (!isSupabaseConfigured) {
     return renderInPopupViewport(
@@ -897,7 +999,9 @@ export default function App() {
   const displayName = coreData?.profile?.display_name || currentUser.email || "John Smith";
   const subjects = coreData?.subjects ?? [];
   const totalStudySeconds = sessions ? calculateTotalStudySeconds(sessions) : 0;
-  const hp = sessions ? calculateHP(sessions) : 0;
+  const baseHp = sessions ? calculateHP(sessions) : 0;
+  const challengePenalty = sessions ? calculateChallengePenalty(sessions, challenges).totalPenalty : 0;
+  const hp = baseHp - challengePenalty;
   const level = calculateLevel(totalStudySeconds);
   const missingSchema = coreError?.includes("Missing database table") ?? false;
 
@@ -983,11 +1087,26 @@ export default function App() {
             <LazyStatsTab
               subjects={subjects}
               sessions={sessions}
+              challenges={challenges}
+              baseHp={baseHp}
+              challengePenalty={challengePenalty}
               radarSubjectIds={radarSubjectIds}
               onChangeRadarIds={setRadarSubjectIds}
+              onSaveChallenge={handleSaveChallenge}
+              onDeleteChallenge={handleDeleteChallenge}
             />
           </Suspense>
         ) : null}
+
+        {coreData && activeTab === "friends" ? (
+          <FriendsTab
+            userId={currentUser.id}
+            userEmail={currentUser.email ?? null}
+            onError={(msg) => pushToast({ tone: "error", title: "Friends", description: msg })}
+          />
+        ) : null}
+
+        {coreData && activeTab === "info" ? <InfoTab /> : null}
 
         {coreData && activeTab === "settings" ? (
           <SettingsTab

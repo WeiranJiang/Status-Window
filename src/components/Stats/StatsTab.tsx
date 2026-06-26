@@ -1,7 +1,9 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
+import { Trash2 } from "lucide-react";
+import { calculateChallengePenalty, getChallengeTodayStatus } from "../../lib/challenges";
 import { calculateHP, calculateTotalStudySeconds, formatDurationShort, toLocalDateKey } from "../../lib/stats";
 import { calculateSubjectHours } from "../../lib/radarStats";
-import type { StudySession, Subject } from "../../types";
+import type { StudyChallenge, StudySession, Subject } from "../../types";
 import { SvgRadarChart } from "./RadarChart";
 import { RadarSubjectSelector } from "./RadarSubjectSelector";
 
@@ -10,8 +12,13 @@ import { RadarSubjectSelector } from "./RadarSubjectSelector";
 interface StatsTabProps {
   subjects: Subject[];
   sessions: StudySession[];
+  challenges: StudyChallenge[];
+  baseHp: number;
+  challengePenalty: number;
   radarSubjectIds: string[];
   onChangeRadarIds: (ids: string[]) => void;
+  onSaveChallenge: (payload: { subjectId: string; dailyTargetMinutes: number; hpPenalty: number }) => Promise<void>;
+  onDeleteChallenge: (challengeId: string) => Promise<void>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -184,6 +191,21 @@ function SubjectRow({
   );
 }
 
+function ChallengeRow({
+  label,
+  detail,
+}: {
+  label: string;
+  detail: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-[10px] font-black uppercase tracking-wide text-[var(--ink)]">{label}</span>
+      <span className="text-right text-[10px] font-bold text-[var(--muted)]">{detail}</span>
+    </div>
+  );
+}
+
 // ── Session history item ─────────────────────────────────────────────────────
 
 function SessionItem({ session }: { session: StudySession }) {
@@ -222,8 +244,13 @@ function SessionItem({ session }: { session: StudySession }) {
 export const StatsTab = memo(function StatsTab({
   subjects,
   sessions,
+  challenges,
+  baseHp,
+  challengePenalty,
   radarSubjectIds,
   onChangeRadarIds,
+  onSaveChallenge,
+  onDeleteChallenge,
 }: StatsTabProps) {
   // ─ Aggregate metrics ─
   const totalSeconds = useMemo(() => calculateTotalStudySeconds(sessions), [sessions]);
@@ -232,6 +259,9 @@ export const StatsTab = memo(function StatsTab({
   const longestCheckInStreak = useMemo(() => calculateLongestCheckInStreak(sessions), [sessions]);
   const weeklyDays = useMemo(() => last7DaysSessions(sessions), [sessions]);
   const [outerRingInput, setOuterRingInput] = useState("");
+  const [selectedChallengeSubjectId, setSelectedChallengeSubjectId] = useState("");
+  const [dailyTargetInput, setDailyTargetInput] = useState("60");
+  const [hpPenaltyInput, setHpPenaltyInput] = useState("1");
   const subjectHours = useMemo(
     () => calculateSubjectHours(subjects, sessions),
     [subjects, sessions],
@@ -256,6 +286,14 @@ export const StatsTab = memo(function StatsTab({
   );
 
   const activeSubjects = useMemo(() => subjects.filter((s) => s.is_active), [subjects]);
+  const challengeBySubjectId = useMemo(
+    () => new Map(challenges.map((challenge) => [challenge.subject_id, challenge])),
+    [challenges],
+  );
+  const challengeSummary = useMemo(
+    () => calculateChallengePenalty(sessions, challenges),
+    [sessions, challenges],
+  );
   const hasEnoughSubjects = activeSubjects.length >= 3;
   const hasEnoughSelected = radarSubjectIds.length >= 3;
   const parsedOuterRingHours = Number(outerRingInput);
@@ -281,6 +319,27 @@ export const StatsTab = memo(function StatsTab({
     [sessions],
   );
 
+  useEffect(() => {
+    if (activeSubjects.length === 0) {
+      setSelectedChallengeSubjectId("");
+      return;
+    }
+
+    setSelectedChallengeSubjectId((current) =>
+      activeSubjects.some((subject) => subject.id === current) ? current : activeSubjects[0].id,
+    );
+  }, [activeSubjects]);
+
+  useEffect(() => {
+    if (!selectedChallengeSubjectId) {
+      return;
+    }
+
+    const existing = challengeBySubjectId.get(selectedChallengeSubjectId);
+    setDailyTargetInput(existing ? String(existing.daily_target_minutes) : "60");
+    setHpPenaltyInput(existing ? String(existing.hp_penalty) : "1");
+  }, [selectedChallengeSubjectId, challengeBySubjectId]);
+
   return (
     <div className="flex flex-col gap-6 py-3 pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500">
 
@@ -301,14 +360,18 @@ export const StatsTab = memo(function StatsTab({
           </span>
           <span
             className={`mt-1 text-3xl font-black tracking-tight ${
-              hp < 0 ? "text-[var(--danger)]" : "text-[var(--leaf)]"
+              baseHp - challengePenalty < 0 ? "text-[var(--danger)]" : "text-[var(--leaf)]"
             }`}
           >
-            {hp}
+            {baseHp - challengePenalty}
           </span>
-          <span className="mt-0.5 text-[9px] font-bold text-[var(--muted)]">
-            Longest streak: {longestCheckInStreak} {longestCheckInStreak === 1 ? "day" : "days"}
-          </span>
+          <div className="mt-0.5 flex flex-col gap-0.5 text-[9px] font-bold text-[var(--muted)]">
+            <span>Base HP: {hp}</span>
+            <span>Challenge loss: -{challengePenalty}</span>
+            <span>
+              Longest streak: {longestCheckInStreak} {longestCheckInStreak === 1 ? "day" : "days"}
+            </span>
+          </div>
         </div>
       </section>
 
@@ -398,6 +461,154 @@ export const StatsTab = memo(function StatsTab({
           </div>
         </section>
       )}
+
+      <section>
+        <div className="flex items-baseline justify-between">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+            Challenges
+          </span>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+            whole-number HP only
+          </span>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-4 shadow-sm">
+          {activeSubjects.length === 0 ? (
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)] opacity-60">
+              Add a subject first to create a challenge.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-2">
+                <select
+                  value={selectedChallengeSubjectId}
+                  onChange={(event) => setSelectedChallengeSubjectId(event.target.value)}
+                  className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                >
+                  {activeSubjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+                      Daily Minutes
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={dailyTargetInput}
+                      onChange={(event) => setDailyTargetInput(event.target.value)}
+                      className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+                      HP Lost
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={hpPenaltyInput}
+                      onChange={(event) => setHpPenaltyInput(event.target.value)}
+                      className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const dailyTargetMinutes = Math.max(1, Math.round(Number(dailyTargetInput)));
+                  const hpLoss = Math.max(1, Math.round(Number(hpPenaltyInput)));
+
+                  if (!selectedChallengeSubjectId || !Number.isFinite(dailyTargetMinutes) || !Number.isFinite(hpLoss)) {
+                    return;
+                  }
+
+                  void onSaveChallenge({
+                    subjectId: selectedChallengeSubjectId,
+                    dailyTargetMinutes,
+                    hpPenalty: hpLoss,
+                  });
+                }}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--sky)] px-4 text-[10px] font-black uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[var(--sky-dark)] active:scale-95"
+              >
+                {challengeBySubjectId.has(selectedChallengeSubjectId) ? "Update challenge" : "Save challenge"}
+              </button>
+
+              <div className="rounded-xl bg-[var(--sky-soft)] px-3 py-2">
+                <ChallengeRow label="Penalty so far" detail={`-${challengeSummary.totalPenalty} HP`} />
+              </div>
+            </>
+          )}
+        </div>
+
+        {challenges.length > 0 ? (
+          <div className="mt-3 flex flex-col gap-2">
+            {challenges.map((challenge) => {
+              const subject = activeSubjects.find((item) => item.id === challenge.subject_id) ?? subjects.find((item) => item.id === challenge.subject_id);
+              const summary = challengeSummary.breakdown.find((item) => item.challengeId === challenge.id);
+
+              return (
+                <div
+                  key={challenge.id}
+                  className="flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 shadow-sm"
+                >
+                  <div className="flex flex-1 flex-col gap-1">
+                    <span className="text-[11px] font-black text-[var(--ink)]">
+                      {subject?.name ?? "Archived subject"}
+                    </span>
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                      {challenge.daily_target_minutes} min daily · -{challenge.hp_penalty} HP each miss
+                    </span>
+                    {(() => {
+                      const todayStatus = getChallengeTodayStatus(sessions, challenge);
+                      return (
+                        <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-[var(--sky-soft)] px-3 py-2">
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-wide ${
+                              todayStatus.completed ? "text-[var(--leaf)]" : "text-[var(--sky-dark)]"
+                            }`}
+                          >
+                            {todayStatus.completed ? "Completed today" : "Not yet"}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                            {todayStatus.studiedMinutes}/{todayStatus.targetMinutes} min
+                            {!todayStatus.completed ? ` · ${todayStatus.remainingMinutes} min left` : ""}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                      Missed days: {summary?.missedDays ?? 0} · Total loss: -{summary?.totalPenalty ?? 0} HP
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void onDeleteChallenge(challenge.id)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] transition-all hover:bg-red-50 hover:text-red-500 active:scale-95"
+                    title="Delete challenge"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-[var(--muted)] opacity-60">
+            No subject challenges yet.
+          </p>
+        )}
+      </section>
 
       {/* ── Recent sessions ── */}
       <section>

@@ -1,4 +1,4 @@
-export type AppTab = "log" | "stats" | "settings";
+export type AppTab = "log" | "stats" | "friends" | "info" | "settings";
 export type AuthMode = "signup" | "login";
 export type SessionMode = "stopwatch" | "timer";
 export type ThemeMode = "light" | "dark";
@@ -110,6 +110,15 @@ export interface DashboardCoreData {
   profile: Profile | null;
   subjects: Subject[];
   settings: UserSettings;
+}
+
+export interface StudyChallenge {
+  id: string;
+  user_id: string;
+  subject_id: string;
+  daily_target_minutes: number;
+  hp_penalty: number;
+  created_at: string;
 }
 
 export interface TimerStartPayload {
