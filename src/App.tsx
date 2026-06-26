@@ -12,7 +12,6 @@ import { acknowledgeTimerNotice, getTimerState, hasChromeRuntime, pauseTimer, re
 import { calculateChallengePenalty, deleteChallenge, loadChallenges, upsertChallenge } from "./lib/challenges";
 import { signInWithGoogle } from "./lib/auth";
 import { COLOR_SCHEMES, DEFAULT_SETTINGS, MINIMUM_CONFIRM_SAVE_SECONDS } from "./lib/constants";
-import { claimEmailFriendInvites } from "./lib/friends";
 import { playSound } from "./lib/sounds";
 import {
   archiveSubject,
@@ -230,37 +229,6 @@ export default function App() {
       setToasts((current) => current.filter((item) => item.id !== nextToast.id));
     }, 4200);
   }, []);
-
-  useEffect(() => {
-    if (!currentUser?.id || !currentUser.email) {
-      return;
-    }
-
-    let active = true;
-
-    void claimEmailFriendInvites(currentUser)
-      .then((claimedCount) => {
-        if (!active || claimedCount === 0) {
-          return;
-        }
-
-        pushToast({
-          tone: "success",
-          title: claimedCount === 1 ? "Friend invite arrived" : "Friend invites arrived",
-          description:
-            claimedCount === 1
-              ? "A friend request is waiting for you in Friends."
-              : `${claimedCount} friend requests are waiting for you in Friends.`,
-        });
-      })
-      .catch(() => {
-        // Keep auth flow resilient even if invite claiming fails.
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [currentUser, pushToast]);
 
   const syncChromeSettingsCache = useCallback(async (nextSettings: UserSettings) => {
     if (globalThis.chrome?.storage?.local) {
@@ -1101,7 +1069,6 @@ export default function App() {
         {coreData && activeTab === "friends" ? (
           <FriendsTab
             userId={currentUser.id}
-            userEmail={currentUser.email ?? null}
             onError={(msg) => pushToast({ tone: "error", title: "Friends", description: msg })}
           />
         ) : null}

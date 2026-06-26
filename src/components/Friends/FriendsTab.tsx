@@ -1,17 +1,13 @@
-import { Check, Copy, Loader, Mail, UserMinus, UserPlus, X } from "lucide-react";
+import { Check, Copy, Loader, UserMinus, UserPlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   acceptFriendRequest,
-  type EmailInvite,
   declineFriendRequest,
   loadFriends,
   loadIncomingRequests,
-  loadOutgoingEmailInvites,
   loadOutgoingRequests,
   removeFriend,
-  sendFriendInviteByEmail,
   sendFriendRequest,
-  withdrawEmailInvite,
   withdrawFriendRequest,
   type FriendProfile,
   type IncomingRequest,
@@ -42,21 +38,16 @@ function OnlineDot({ online }: { online: boolean }) {
 
 export function FriendsTab({
   userId,
-  userEmail,
   onError,
 }: {
   userId: string;
-  userEmail: string | null;
   onError: (msg: string) => void;
 }) {
   const [inviteInput, setInviteInput] = useState("");
-  const [emailInviteInput, setEmailInviteInput] = useState("");
   const [sendBusy, setSendBusy] = useState(false);
-  const [sendEmailBusy, setSendEmailBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [incoming, setIncoming] = useState<IncomingRequest[]>([]);
   const [outgoing, setOutgoing] = useState<OutgoingRequest[]>([]);
-  const [outgoingEmailInvites, setOutgoingEmailInvites] = useState<EmailInvite[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [reqIdMap, setReqIdMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -70,16 +61,14 @@ export function FriendsTab({
 
   const refresh = async () => {
     try {
-      const [incomingData, outgoingData, outgoingEmailData, { list, requestId }] = await Promise.all([
+      const [incomingData, outgoingData, { list, requestId }] = await Promise.all([
         loadIncomingRequests(userId),
         loadOutgoingRequests(userId),
-        loadOutgoingEmailInvites(userId),
         loadFriends(userId),
       ]);
       if (!mountedRef.current) return;
       setIncoming(incomingData);
       setOutgoing(outgoingData);
-      setOutgoingEmailInvites(outgoingEmailData);
       setFriends(list);
       const map: Record<string, string> = {};
       list.forEach((f) => { map[f.userId] = requestId(f.userId); });
@@ -162,30 +151,6 @@ export function FriendsTab({
     }
   };
 
-  const handleSendEmailInvite = async () => {
-    const target = emailInviteInput.trim();
-    if (!target) return;
-    setSendEmailBusy(true);
-    try {
-      await sendFriendInviteByEmail(userId, userEmail, target);
-      setEmailInviteInput("");
-      await refresh();
-    } catch (err) {
-      onError(err instanceof Error ? err.message : "Could not send email invite.");
-    } finally {
-      setSendEmailBusy(false);
-    }
-  };
-
-  const handleWithdrawEmailInvite = async (invite: EmailInvite) => {
-    try {
-      await withdrawEmailInvite(invite.id);
-      setOutgoingEmailInvites((current) => current.filter((item) => item.id !== invite.id));
-    } catch (err) {
-      onError(err instanceof Error ? err.message : "Could not withdraw email invite.");
-    }
-  };
-
   const copyId = () => {
     void navigator.clipboard.writeText(userId);
     setCopied(true);
@@ -249,31 +214,6 @@ export function FriendsTab({
         </div>
       </section>
 
-      <section>
-        <SectionLabel>Invite by Email</SectionLabel>
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            value={emailInviteInput}
-            onChange={(e) => setEmailInviteInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void handleSendEmailInvite(); }}
-            placeholder="friend@example.com"
-            type="email"
-            className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-xs font-bold text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)] outline-none"
-          />
-          <button
-            disabled={sendEmailBusy || !emailInviteInput.trim()}
-            onClick={() => void handleSendEmailInvite()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--ink)] text-white shadow-md transition-all active:scale-95 disabled:opacity-40"
-            title="Send email invite"
-          >
-            {sendEmailBusy ? <Loader className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-          </button>
-        </div>
-        <p className="mt-1.5 text-[9px] font-bold text-[var(--muted)] uppercase tracking-wide">
-          We email them a sign-in link. After they use that email, your invite appears in their account.
-        </p>
-      </section>
-
       {/* INCOMING REQUESTS */}
       {loading ? (
         <div className="flex justify-center py-4">
@@ -300,34 +240,6 @@ export function FriendsTab({
                       onClick={() => void handleWithdraw(req)}
                       className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-[var(--muted)] transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-500 active:scale-95"
                       title="Withdraw invite"
-                    >
-                      Withdraw
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {outgoingEmailInvites.length > 0 && (
-            <section>
-              <SectionLabel>Pending Email Invites</SectionLabel>
-              <div className="mt-3 flex flex-col gap-2">
-                {outgoingEmailInvites.map((invite) => (
-                  <div
-                    key={invite.id}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3"
-                  >
-                    <div className="flex flex-1 flex-col">
-                      <span className="text-xs font-bold text-[var(--ink)]">{invite.toEmail}</span>
-                      <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
-                        Email sent
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => void handleWithdrawEmailInvite(invite)}
-                      className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-[var(--muted)] transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-500 active:scale-95"
-                      title="Withdraw email invite"
                     >
                       Withdraw
                     </button>
