@@ -21,11 +21,11 @@ export function AppShell({
   return (
     <div className="relative flex h-[600px] w-[420px] flex-col overflow-hidden bg-[var(--bg)] font-sans selection:bg-[var(--sky-soft)]">
       {/* MINIMAL TOP BAR */}
-      <header className="shrink-0 border-b border-[var(--border)]/70 px-6 pt-4 pb-5">
+      <header className="shrink-0 px-6 pt-4 pb-5">
         <div className="text-center">
           <span className="text-[14px] font-black uppercase tracking-[0.18em] text-[var(--muted)]">Status</span>
         </div>
-        <div className="mt-3 border-t border-[var(--border)]/70" />
+        <div className="mx-auto mt-3 w-[88%] border-t border-[var(--border)]/70" />
 
         <div className="mt-4 flex items-start justify-between">
           <div className="flex flex-col">
@@ -49,6 +49,7 @@ export function AppShell({
             </div>
           </div>
         </div>
+        <div className="mx-auto mt-4 w-[88%] border-t border-[var(--border)]/70" />
       </header>
 
       {/* MAIN CONTENT AREA */}

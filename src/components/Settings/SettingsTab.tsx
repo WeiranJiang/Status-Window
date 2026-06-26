@@ -48,6 +48,40 @@ function PreferenceActionButton({
   );
 }
 
+function ColorDotInput({
+  value,
+  onChange,
+  label,
+  size = "md",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  size?: "md" | "lg";
+}) {
+  const dimensions = size === "lg" ? "h-10 w-10" : "h-9 w-9";
+  const dotSize = size === "lg" ? "h-6 w-6" : "h-5 w-5";
+
+  return (
+    <label
+      className={`relative flex ${dimensions} shrink-0 cursor-pointer items-center justify-center rounded-full border border-[var(--border)] bg-[var(--paper)] shadow-sm transition-all hover:border-[var(--sky)] hover:shadow-md`}
+      aria-label={label}
+    >
+      <input
+        type="color"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="absolute inset-0 cursor-pointer opacity-0"
+        aria-label={label}
+      />
+      <span
+        className={`${dotSize} rounded-full border border-black/5`}
+        style={{ backgroundColor: value }}
+      />
+    </label>
+  );
+}
+
 export function SettingsTab({
   settings,
   subjects,
@@ -107,17 +141,15 @@ export function SettingsTab({
         <div className="mt-3 flex flex-col gap-2">
           {activeSubjects.map((s) => (
             <div key={s.id} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 shadow-sm">
-              <input
-                type="color"
+              <ColorDotInput
                 value={subjectColorDrafts[s.id] ?? s.color ?? "#5b9bd5"}
-                onChange={(e) =>
+                onChange={(value) =>
                   setSubjectColorDrafts((current) => ({
                     ...current,
-                    [s.id]: e.target.value,
+                    [s.id]: value,
                   }))
                 }
-                className="h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-[var(--border)] p-0"
-                aria-label={`Change color for subject ${s.name}`}
+                label={`Change color for subject ${s.name}`}
               />
               <input
                 value={subjectDrafts[s.id] ?? s.name}
@@ -173,11 +205,11 @@ export function SettingsTab({
           ))}
           
           <div className="mt-2 flex items-center gap-2">
-            <input
-              type="color"
+            <ColorDotInput
               value={newSubColor}
-              onChange={(e) => setNewSubColor(e.target.value)}
-              className="h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-[var(--border)] p-0"
+              onChange={setNewSubColor}
+              label="Choose color for new subject"
+              size="lg"
             />
             <input
               value={newSubName}
