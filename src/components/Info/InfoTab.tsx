@@ -34,7 +34,7 @@ export function InfoTab() {
       </Section>
 
       <Section title="Friends">
-        <Row label="Add" detail="Invite by user ID or by email; email invites appear after the recipient signs in with that address." />
+        <Row label="Add" detail="Copy your User ID and share it; paste a friend's ID to invite." />
         <Row label="Online" detail="Green dot = they have a timer running right now" />
         <Row label="Today" detail="Hours each friend has studied since midnight (UTC)." />
       </Section>
