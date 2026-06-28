@@ -3,6 +3,8 @@ import { Check, LogOut, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Subject, UserSettings } from "../../types";
 
+const sectionHeadingClassName = "sw-display-accent text-[12px] uppercase tracking-widest text-[var(--muted)]";
+
 function PreferenceCheck({
   checked,
   onToggle,
@@ -115,15 +117,15 @@ export function SettingsTab({
   }, [initialDisplayName]);
 
   return (
-    <div className="flex flex-col gap-6 py-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="flex flex-col gap-6 pt-1 pb-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
       {/* IDENTITY */}
       <section>
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Profile</span>
+        <span className={sectionHeadingClassName}>Profile</span>
         <div className="mt-4 flex items-center gap-2">
           <input
             value={dispName}
             onChange={(e) => setDispName(e.target.value)}
-            className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-xs font-bold text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+            className="sw-display-accent flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-xs text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
             placeholder="Name"
           />
           <button
@@ -137,7 +139,7 @@ export function SettingsTab({
 
       {/* SUBJECTS */}
       <section>
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Subjects</span>
+        <span className={sectionHeadingClassName}>Subjects</span>
         <div className="mt-3 flex flex-col gap-2">
           {activeSubjects.map((s) => (
             <div key={s.id} className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3 shadow-sm">
@@ -159,7 +161,7 @@ export function SettingsTab({
                     [s.id]: e.target.value,
                   }))
                 }
-                className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs font-bold text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                className="sw-display-accent flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                 aria-label={`Rename subject ${s.name}`}
               />
               <button
@@ -215,7 +217,7 @@ export function SettingsTab({
               value={newSubName}
               onChange={(e) => setNewSubName(e.target.value)}
               placeholder="Subject"
-              className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-xs font-bold text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+              className="sw-display-accent flex-1 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-xs text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
             />
             <button
               onClick={async () => {
@@ -234,7 +236,7 @@ export function SettingsTab({
 
       {/* COLOR SCHEME */}
       <section>
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Color Scheme</span>
+        <span className={sectionHeadingClassName}>Color Scheme</span>
         <div className="mt-3 grid grid-cols-2 gap-3">
           {COLOR_SCHEMES.slice(0, 4).map((scheme) => {
             const active = settings.color_scheme === scheme.id;
@@ -253,7 +255,7 @@ export function SettingsTab({
                   <span className="h-4 w-4 rounded-full border border-black/5" style={{ backgroundColor: scheme.paper }} />
                   <span className="h-4 w-4 rounded-full border border-black/5" style={{ backgroundColor: scheme.accent }} />
                 </div>
-                <div className="text-sm font-black text-[var(--ink)]">{scheme.name}</div>
+                <div className="sw-display-accent text-base text-[var(--ink)]">{scheme.name}</div>
               </button>
             );
           })}
@@ -262,7 +264,7 @@ export function SettingsTab({
 
       {/* OPTIONS */}
       <section>
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Preferences</span>
+        <span className={sectionHeadingClassName}>Preferences</span>
         <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--paper)]/70 px-4 py-3">
             <div className="flex flex-col">

@@ -29,6 +29,10 @@ export const formatSessionDate = (isoString: string) =>
 
 export const toLocalDateKey = (isoString: string) => {
   const date = new Date(isoString);
+  return toLocalDateKeyFromDate(date);
+};
+
+export const toLocalDateKeyFromDate = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -90,7 +94,7 @@ export const calculateHP = (sessions: StudySession[], today = new Date()) => {
   const cursor = new Date(firstDay);
 
   while (cursor <= endDay) {
-    const key = toLocalDateKey(cursor.toISOString());
+    const key = toLocalDateKeyFromDate(cursor);
     const total = sessionsByDay.get(key) ?? 0;
     hp += total >= 3600 ? 1 : -1;
     cursor.setDate(cursor.getDate() + 1);

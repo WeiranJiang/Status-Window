@@ -37,8 +37,8 @@ export function SidePanelApp() {
     <div className="sidepanel-shell text-[var(--ink)]">
       <div className="mx-auto flex min-h-screen w-full max-w-[420px] flex-col px-6 py-6">
         <header className="shrink-0">
-          <p className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Status Window</p>
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-[var(--ink)]">Always-visible timer</h1>
+          <p className="sw-display-accent text-[10px] uppercase tracking-widest text-[var(--muted)]">Status Window</p>
+          <h1 className="sw-panel-title mt-2">Always-visible timer</h1>
           <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
             Keep a compact session card open while you move around Chrome.
           </p>

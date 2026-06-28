@@ -17,9 +17,9 @@ import { formatDurationShort } from "../../lib/stats";
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+    <span className={`sw-display-accent text-[10px] uppercase tracking-widest text-[var(--muted)] ${className}`}>
       {children}
     </span>
   );
@@ -159,7 +159,7 @@ export function FriendsTab({
 
   if (dbIssueMessage) {
     return (
-      <div className="flex flex-col gap-4 py-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className="flex flex-col gap-4 pt-1 pb-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-5 text-center">
           <p className="text-xs font-bold text-[var(--ink)]">Friends needs DB setup</p>
           <p className="mt-2 text-[10px] font-bold text-[var(--muted)] leading-5">
@@ -171,11 +171,11 @@ export function FriendsTab({
   }
 
   return (
-    <div className="flex flex-col gap-8 py-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="flex flex-col gap-8 pt-1 pb-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
 
       {/* MY ID */}
       <section>
-        <SectionLabel>My User ID</SectionLabel>
+        <SectionLabel className="text-[12px]">My User ID</SectionLabel>
         <div className="mt-3 flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3">
           <span className="flex-1 truncate text-[10px] font-bold text-[var(--muted)] font-mono">
             {userId}
@@ -195,7 +195,7 @@ export function FriendsTab({
 
       {/* ADD FRIEND */}
       <section>
-        <SectionLabel>Add Friend (Send Invite)</SectionLabel>
+        <SectionLabel className="text-[12px]">Add Friend (Send Invite)</SectionLabel>
         <div className="mt-3 flex items-center gap-2">
           <input
             value={inviteInput}
@@ -283,7 +283,7 @@ export function FriendsTab({
           <section className="mb-12">
             <SectionLabel>Friends ({friends.length})</SectionLabel>
             {friends.length === 0 ? (
-              <p className="mt-3 text-xs font-bold text-[var(--muted)]">
+              <p className="sw-display-accent mt-3 text-xs text-[var(--muted)]">
                 No friends yet.
               </p>
             ) : (

@@ -6,6 +6,8 @@ interface RadarSubjectSelectorProps {
   onChange: (selectedIds: string[]) => void;
 }
 
+const sectionHeadingClassName = "sw-display-accent text-[12px] uppercase tracking-widest text-[var(--muted)]";
+
 export function RadarSubjectSelector({
   subjects,
   selectedSubjectIds,
@@ -31,7 +33,7 @@ export function RadarSubjectSelector({
     <div>
       {/* Label row */}
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+        <span className={sectionHeadingClassName}>
           Radar Subjects
         </span>
         <span
@@ -53,7 +55,7 @@ export function RadarSubjectSelector({
               key={subject.id}
               type="button"
               onClick={() => toggle(subject.id)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wide transition-all duration-150 active:scale-95 ${
+              className={`sw-display-accent inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] uppercase tracking-wide transition-all duration-150 active:scale-95 ${
                 selected
                   ? "border-transparent text-white shadow-sm"
                   : "border-[var(--border)] bg-[var(--paper)] text-[var(--muted)] hover:text-[var(--ink)]"

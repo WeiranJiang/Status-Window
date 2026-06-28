@@ -1,3 +1,5 @@
+@import "@fontsource/darumadrop-one";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,7 +17,7 @@
   --danger: #ef4444;
   --border: #e8e3dc;
   --radius: 16px;
-  --font-display: "Avenir Next", "Nunito Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Darumadrop One", "Avenir Next", "Nunito Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font: "Avenir Next", "Nunito Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
@@ -109,6 +111,12 @@ input[type="number"]::-webkit-outer-spin-button {
   .sw-panel-title {
     @apply text-2xl font-black tracking-tight text-[var(--ink)];
     font-family: var(--font-display);
+  }
+
+  .sw-display-accent {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: 0.04em;
   }
 
   .sw-copy {

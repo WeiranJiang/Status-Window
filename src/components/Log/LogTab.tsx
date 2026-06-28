@@ -62,12 +62,12 @@ export function LogTab({
         <div className="flex flex-col gap-6 py-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {/* SUBJECT SELECTOR */}
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Subject</span>
+            <span className="sw-display-accent text-[12px] uppercase tracking-widest text-[var(--muted)]">Subject</span>
             <div className="mt-3">
               <select
                 value={selectedSubjectId}
                 onChange={(e) => setSelectedSubjectId(e.target.value)}
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3.5 text-sm font-bold text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)] appearance-none cursor-pointer"
+                className="sw-display-accent w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3.5 text-sm text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)] appearance-none cursor-pointer"
               >
                 {activeSubjects.map((subject) => (
                   <option key={subject.id} value={subject.id}>
@@ -80,7 +80,7 @@ export function LogTab({
 
           {/* MODE & TIME */}
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">Session Mode</span>
+            <span className="sw-display-accent text-[12px] uppercase tracking-widest text-[var(--muted)]">Session Mode</span>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -90,7 +90,7 @@ export function LogTab({
                 }`}
               >
                 <Clock3 className={`h-6 w-6 ${mode === "stopwatch" ? "text-[var(--sky)]" : ""}`} />
-                <span className="text-[11px] font-extrabold uppercase tracking-tight">Stopwatch</span>
+                <span className="sw-display-accent text-[11px] uppercase tracking-tight">Stopwatch</span>
               </button>
               <button
                 type="button"
@@ -100,7 +100,7 @@ export function LogTab({
                 }`}
               >
                 <TimerReset className={`h-6 w-6 ${mode === "timer" ? "text-[var(--sky)]" : ""}`} />
-                <span className="text-[11px] font-extrabold uppercase tracking-tight">Timer</span>
+                <span className="sw-display-accent text-[11px] uppercase tracking-tight">Timer</span>
               </button>
             </div>
 
@@ -112,7 +112,7 @@ export function LogTab({
                     min="0"
                     value={hours}
                     onChange={(e) => setHours(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-lg font-black text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                    className="sw-display-accent w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-lg text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[var(--muted)]">HOURS</span>
                 </div>
@@ -122,7 +122,7 @@ export function LogTab({
                     min="0"
                     value={minutes}
                     onChange={(e) => setMinutes(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-lg font-black text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                    className="sw-display-accent w-full rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-lg text-[var(--ink)] focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[var(--muted)]">MINS</span>
                 </div>
@@ -134,7 +134,7 @@ export function LogTab({
           <div className="mt-4">
             <button
               onClick={() => void startSession()}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[var(--ink)] py-5 text-lg font-black tracking-tight text-white shadow-2xl transition-all hover:bg-black active:scale-[0.98]"
+              className="sw-display-accent flex w-full items-center justify-center gap-3 rounded-2xl bg-[var(--ink)] py-5 text-lg tracking-tight text-white shadow-2xl transition-all hover:bg-black active:scale-[0.98]"
             >
               <Play className="h-6 w-6 fill-white" />
               START SESSION

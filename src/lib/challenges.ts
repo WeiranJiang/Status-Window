@@ -1,5 +1,5 @@
 import { getStorageItem, setStorageItem } from "./storage";
-import { toLocalDateKey } from "./stats";
+import { toLocalDateKey, toLocalDateKeyFromDate } from "./stats";
 import type { StudyChallenge, StudySession } from "../types";
 
 const CHALLENGES_STORAGE_KEY_PREFIX = "status-window-challenges:";
@@ -153,7 +153,7 @@ export function calculateChallengePenalty(sessions: StudySession[], challenges: 
     let missedDays = 0;
     const cursor = new Date(startDay);
     while (cursor <= penaltyEndDay) {
-      const key = `${challenge.subject_id}:${toLocalDateKey(cursor.toISOString())}`;
+      const key = `${challenge.subject_id}:${toLocalDateKeyFromDate(cursor)}`;
       const studiedSeconds = subjectDaySeconds.get(key) ?? 0;
       if (studiedSeconds < challenge.daily_target_minutes * 60) {
         missedDays += 1;
@@ -180,7 +180,7 @@ export function getChallengeTodayStatus(
   challenge: StudyChallenge,
   today = new Date(),
 ) {
-  const todayKey = toLocalDateKey(today.toISOString());
+  const todayKey = toLocalDateKeyFromDate(today);
   const studiedSeconds = sessions
     .filter((session) => session.subject_id === challenge.subject_id && toLocalDateKey(session.start_time) === todayKey)
     .reduce((sum, session) => sum + session.duration_seconds, 0);

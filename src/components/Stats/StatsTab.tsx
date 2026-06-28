@@ -22,6 +22,8 @@ interface StatsTabProps {
   onToggleChallengePaused: (challengeId: string, paused: boolean) => Promise<void>;
 }
 
+const sectionHeadingClassName = "sw-display-accent text-[12px] uppercase tracking-widest text-[var(--muted)]";
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Last 7 days: returns [{ dateKey, seconds }] newest→oldest */
@@ -178,7 +180,7 @@ function SubjectRow({
         className="h-2 w-2 shrink-0 rounded-full"
         style={{ backgroundColor: color ?? "var(--sky)" }}
       />
-      <span className="w-20 truncate text-[10px] font-bold text-[var(--ink)]">{name}</span>
+      <span className="sw-display-accent w-24 truncate text-[12px] text-[var(--ink)]">{name}</span>
       <div className="flex-1 overflow-hidden rounded-full bg-[var(--border)]" style={{ height: 5 }}>
         <div
           className="h-full rounded-full transition-all duration-500"
@@ -345,25 +347,25 @@ export const StatsTab = memo(function StatsTab({
   }, [selectedChallengeSubjectId, challengeBySubjectId]);
 
   return (
-    <div className="flex flex-col gap-6 py-3 pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="flex flex-col gap-6 pt-1 pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500">
 
       {/* ── Primary metrics ── */}
       <section className="grid grid-cols-2 gap-3">
         <div className="flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-4 shadow-sm">
-          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--muted)]">
+          <span className="sw-display-accent text-[11px] uppercase tracking-widest text-[var(--muted)]">
             Focus Hours
           </span>
-          <span className="mt-1 text-3xl font-black tracking-tight text-[var(--ink)]">
+          <span className="sw-display-accent mt-1 text-3xl tracking-tight text-[var(--ink)]">
             {totalHours.toFixed(1)}
           </span>
           <span className="mt-0.5 text-[9px] font-bold text-[var(--muted)]">all-time</span>
         </div>
         <div className="flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-4 shadow-sm">
-          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--muted)]">
+          <span className="sw-display-accent text-[11px] uppercase tracking-widest text-[var(--muted)]">
             Survival HP
           </span>
           <span
-            className={`mt-1 text-3xl font-black tracking-tight ${
+            className={`sw-display-accent mt-1 text-3xl tracking-tight ${
               baseHp - challengePenalty < 0 ? "text-[var(--danger)]" : "text-[var(--leaf)]"
             }`}
           >
@@ -381,9 +383,9 @@ export const StatsTab = memo(function StatsTab({
 
       {/* ── Weekly bars ── */}
       <section>
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
-          This Week
-        </span>
+          <span className={sectionHeadingClassName}>
+            This Week
+          </span>
         <div className="mt-3 flex justify-center rounded-2xl border border-[var(--border)] bg-[var(--paper)] py-4 shadow-sm">
           <WeeklyBars days={weeklyDays} />
         </div>
@@ -449,7 +451,7 @@ export const StatsTab = memo(function StatsTab({
       {/* ── Subject breakdown ── */}
       {subjectHours.length > 0 && (
         <section>
-          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+          <span className={sectionHeadingClassName}>
             By Subject
           </span>
           <div className="mt-3 flex flex-col gap-2.5 rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-4 shadow-sm">
@@ -468,7 +470,7 @@ export const StatsTab = memo(function StatsTab({
 
       <section>
         <div className="flex items-baseline justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+          <span className={sectionHeadingClassName}>
             Challenges
           </span>
           <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
@@ -586,7 +588,7 @@ export const StatsTab = memo(function StatsTab({
                   className="flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 shadow-sm"
                 >
                   <div className="flex flex-1 flex-col gap-1">
-                    <span className="text-[11px] font-black text-[var(--ink)]">
+                    <span className="sw-display-accent text-[13px] text-[var(--ink)]">
                       {subject?.name ?? "Archived subject"}
                     </span>
                     <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
@@ -686,7 +688,7 @@ export const StatsTab = memo(function StatsTab({
       {/* ── Recent sessions ── */}
       <section>
         <div className="flex items-baseline justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+          <span className={sectionHeadingClassName}>
             History
           </span>
           <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">

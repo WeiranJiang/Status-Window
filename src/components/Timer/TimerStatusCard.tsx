@@ -22,14 +22,14 @@ export function TimerStatusCard({
     <div className="flex flex-col items-center justify-center py-10 text-center animate-in zoom-in-95 duration-300">
       <div className="mb-4">
         <span
-          className="inline-block rounded-full px-6 py-2.5 text-base font-black uppercase tracking-[0.16em] text-white shadow-md ring-2 ring-white/20"
+          className="sw-display-accent inline-block rounded-full px-6 py-2.5 text-base uppercase tracking-[0.16em] text-white shadow-md ring-2 ring-white/20"
           style={{ backgroundColor: timer.subjectColor ?? "var(--sky)" }}
         >
           {timer.subjectName}
         </span>
       </div>
 
-      <div className="my-8 font-mono text-7xl font-black tracking-tighter text-[var(--ink)] tabular-nums">
+      <div className="sw-display-accent my-8 text-7xl tracking-tighter text-[var(--ink)] tabular-nums">
         {formatSeconds(displaySeconds)}
       </div>
 

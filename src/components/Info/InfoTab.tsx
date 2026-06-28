@@ -1,8 +1,8 @@
 export function InfoTab() {
   return (
-    <div className="flex flex-col gap-5 py-4 pb-24 animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="flex flex-col gap-5 pt-1 pb-24 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div>
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
+        <span className="sw-display-accent text-[14px] uppercase tracking-[0.14em] text-[var(--muted)]">
           How Your Status Window Works
         </span>
       </div>
@@ -16,7 +16,7 @@ export function InfoTab() {
       <Section title="Health (HP)">
         <Row label="+1 HP" detail="Study ≥ 1 hour on a given day." />
         <Row label="−1 HP" detail="Study < 1 hour (or skip) on a given day." />
-        <Row label="Challenges" detail="Challenge HP only drops after a missed day fully ends, not while today is still in progress." />
+        <Row label="Challenges" detail="Challenge HP only drops after a missed day fully ends in your local time zone, not while today is still in progress." />
         <Row label="Goal" detail="Keep positive HP: it tracks your daily consistency from day one." />
         <Row label="Danger zone" detail="HP goes red when negative." />
       </Section>
@@ -30,7 +30,7 @@ export function InfoTab() {
         <Row label="History" detail="Every saved session is listed with subject and duration." />
         <Row label="Radar" detail="Subject breakdown across up to 4 topics." />
         <Row label="Weekly" detail="Bar chart of study hours over the past 7 days." />
-        <Row label="Challenges" detail="Set daily subject goals and choose a whole-number HP penalty for missed days." />
+        <Row label="Challenges" detail="Daily challenge resets and deadlines follow your local time zone." />
       </Section>
 
       <Section title="Friends">
@@ -59,7 +59,7 @@ function Section({
   return (
     <section>
       <div className="mb-1.5 flex items-center gap-2">
-        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--sky)]">
+        <span className="sw-display-accent text-[10px] uppercase tracking-widest text-[var(--sky)]">
           {title}
         </span>
       </div>
@@ -73,7 +73,7 @@ function Section({
 function Row({ label, detail }: { label: string; detail: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="w-20 shrink-0 text-[10px] font-black uppercase tracking-wide text-[var(--ink)]">
+      <span className="sw-display-accent w-20 shrink-0 text-[10px] uppercase tracking-wide text-[var(--ink)]">
         {label}
       </span>
       <span className="text-[10px] font-bold leading-4 text-[var(--muted)]">{detail}</span>

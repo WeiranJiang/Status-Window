@@ -34,6 +34,7 @@ import type { AppTab, AuthMode, DashboardCoreData, StudyChallenge, Subject, Stud
 const LazyStatsTab = lazy(() => import("./components/Stats/StatsTab").then(({ StatsTab }) => ({ default: StatsTab })));
 const SETTINGS_CACHE_KEY = "status-window-settings";
 const CORE_CACHE_KEY_PREFIX = "status-window-core-cache:";
+const SESSIONS_CACHE_KEY_PREFIX = "status-window-sessions-cache:";
 const LOADING_THEME: Omit<UserSettings, "id" | "user_id" | "created_at"> = {
   ...DEFAULT_SETTINGS,
   color_scheme: "warm-cream",
@@ -59,6 +60,31 @@ function writeCoreCache(userId: string, data: DashboardCoreData) {
 
   try {
     window.localStorage.setItem(`${CORE_CACHE_KEY_PREFIX}${userId}`, JSON.stringify(data));
+  } catch {
+    // Ignore cache write failures and keep the live UI responsive.
+  }
+}
+
+function readSessionsCache(userId: string): StudySession[] | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const cached = window.localStorage.getItem(`${SESSIONS_CACHE_KEY_PREFIX}${userId}`);
+    return cached ? (JSON.parse(cached) as StudySession[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionsCache(userId: string, sessions: StudySession[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(`${SESSIONS_CACHE_KEY_PREFIX}${userId}`, JSON.stringify(sessions));
   } catch {
     // Ignore cache write failures and keep the live UI responsive.
   }
@@ -265,6 +291,7 @@ export default function App() {
             return;
           }
 
+          writeSessionsCache(user.id, nextSessions);
           startTransition(() => {
             setSessions(nextSessions);
           });
@@ -320,6 +347,15 @@ export default function App() {
 
           writeCoreCache(user.id, nextCoreData);
           await syncChromeSettingsCache(nextCoreData.settings);
+
+          // Keep the header metrics fresh without blocking the initial popup render.
+          if (sessionsRef.current === null) {
+            window.setTimeout(() => {
+              void loadStatsData(user).catch(() => {
+                // Errors are already captured in state if the user later opens Stats.
+              });
+            }, 0);
+          }
         } catch (error) {
           if (currentUserRef.current?.id === user.id) {
             const message = error instanceof Error ? error.message : "Unable to load your dashboard.";
@@ -340,7 +376,7 @@ export default function App() {
 
       return coreLoadPromiseRef.current;
     },
-    [ensureUserInitialized, syncChromeSettingsCache],
+    [ensureUserInitialized, loadStatsData, syncChromeSettingsCache],
   );
 
   useEffect(() => {
@@ -471,6 +507,12 @@ export default function App() {
             ? current.filter((subjectId) => cachedCoreData.subjects.some((subject) => subject.id === subjectId && subject.is_active))
             : cachedCoreData.subjects.filter((subject) => subject.is_active).slice(0, 3).map((subject) => subject.id),
         );
+      }
+
+      const cachedSessions = readSessionsCache(nextSession.user.id);
+      if (cachedSessions) {
+        setSessions(cachedSessions);
+        sessionsRef.current = cachedSessions;
       }
 
       void loadCoreData(nextSession.user).catch(() => {
@@ -989,8 +1031,8 @@ export default function App() {
   const totalStudySeconds = sessions ? calculateTotalStudySeconds(sessions) : 0;
   const baseHp = sessions ? calculateHP(sessions) : 0;
   const challengePenalty = sessions ? calculateChallengePenalty(sessions, challenges).totalPenalty : 0;
-  const hp = baseHp - challengePenalty;
-  const level = calculateLevel(totalStudySeconds);
+  const hp = sessions ? baseHp - challengePenalty : null;
+  const level = sessions ? calculateLevel(totalStudySeconds) : null;
   const missingSchema = coreError?.includes("Missing database table") ?? false;
 
   return renderInPopupViewport(
