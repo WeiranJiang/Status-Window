@@ -12,7 +12,6 @@ import { acknowledgeTimerNotice, getTimerState, hasChromeRuntime, pauseTimer, re
 import { calculateChallengePenalty, deleteChallenge, loadChallenges, setChallengePaused, upsertChallenge } from "./lib/challenges";
 import { signInWithGoogle } from "./lib/auth";
 import { COLOR_SCHEMES, DEFAULT_SETTINGS, MINIMUM_CONFIRM_SAVE_SECONDS } from "./lib/constants";
-import { useEchoEasterEgg } from "./hooks/useEchoEasterEgg";
 import { playSound } from "./lib/sounds";
 import { getStorageItem, removeStorageItem, removeStorageItemsWithPrefix, setStorageItem } from "./lib/storage";
 import { getStoredTimeZonePreference, setStoredTimeZonePreference } from "./lib/timezones";
@@ -180,7 +179,6 @@ export default function App() {
   const [timerState, setTimerState] = useState<TimerDisplayState | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [radarSubjectIds, setRadarSubjectIds] = useState<string[]>([]);
-  const [pendingSignupEcho, setPendingSignupEcho] = useState(false);
   const processedNoticeId = useRef<string | null>(null);
   const currentUserRef = useRef<User | null>(null);
   const coreDataRef = useRef<DashboardCoreData | null>(null);
@@ -247,17 +245,6 @@ export default function App() {
     () => (sessions ? calculateLevel(calculateTotalStudySeconds(sessions)) : 0),
     [sessions],
   );
-
-  const {
-    overlay: echoOverlay,
-    maybeTriggerEchoEasterEgg: maybeStartEchoEasterEgg,
-  } = useEchoEasterEgg({
-    userId: currentUser?.id ?? null,
-    userLevel: currentUserLevel,
-    timerActive: Boolean(timerState?.active),
-    sessions,
-    sessionsLoaded: sessions !== null,
-  });
 
   const pushToast = useCallback((toast: Omit<ToastItem, "id">) => {
     const nextToast = { id: crypto.randomUUID(), tone: "neutral" as const, ...toast };
@@ -413,15 +400,6 @@ export default function App() {
       // The error is already stored in component state for the UI.
     });
   }, [coreData, coreError, coreLoading, currentUser, loadCoreData]);
-
-  useEffect(() => {
-    if (!pendingSignupEcho || !currentUser || !coreData || authLoading) {
-      return;
-    }
-
-    setPendingSignupEcho(false);
-    void maybeStartEchoEasterEgg();
-  }, [authLoading, coreData, currentUser, maybeStartEchoEasterEgg, pendingSignupEcho]);
 
   const syncTimer = useCallback(async () => {
     if (!hasChromeRuntime) {
@@ -683,7 +661,6 @@ export default function App() {
             currentUserRef.current = response.data.session.user;
             setSession(response.data.session);
             setCurrentUser(response.data.session.user);
-            setPendingSignupEcho(true);
             setAuthLoading(true);
             void loadCoreData(response.data.session.user, { force: true }).finally(() => {
               setAuthLoading(false);
@@ -1007,7 +984,6 @@ export default function App() {
 
   const resetSignedInState = useCallback(async (userId?: string | null) => {
     await clearDashboardCaches(userId);
-    setPendingSignupEcho(false);
     setSession(null);
     setCurrentUser(null);
     setCoreData(null);
@@ -1199,7 +1175,6 @@ export default function App() {
     return renderInPopupViewport(
       <>
         <ToastStack toasts={toasts} />
-        {echoOverlay}
         <AuthScreen
           loading={authBusy}
           mode={authMode}
@@ -1226,7 +1201,6 @@ export default function App() {
   return renderInPopupViewport(
     <>
       <ToastStack toasts={toasts} />
-      {echoOverlay}
       <AppShell
         activeTab={activeTab}
         displayName={displayName}

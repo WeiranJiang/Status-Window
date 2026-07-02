@@ -52,45 +52,6 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes echoFlicker {
-  0%, 100% { opacity: 1; }
-  28% { opacity: 0.7; }
-  31% { opacity: 1; }
-  48% { opacity: 0.82; }
-  52% { opacity: 1; }
-}
-
-@keyframes echoShakeLight {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  25% { transform: translate3d(-0.5px, 0.5px, 0); }
-  50% { transform: translate3d(0.5px, -0.5px, 0); }
-  75% { transform: translate3d(-0.25px, 0.25px, 0); }
-}
-
-@keyframes echoShakeMedium {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  20% { transform: translate3d(-1px, 0.75px, 0); }
-  40% { transform: translate3d(1px, -0.75px, 0); }
-  60% { transform: translate3d(-0.75px, -0.5px, 0); }
-  80% { transform: translate3d(0.75px, 1px, 0); }
-}
-
-@keyframes echoShakeViolent {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  12% { transform: translate3d(-1.5px, 1px, 0) rotate(-0.35deg); }
-  24% { transform: translate3d(1.5px, -1px, 0) rotate(0.3deg); }
-  36% { transform: translate3d(-1px, -1px, 0) rotate(-0.28deg); }
-  48% { transform: translate3d(1.25px, 1.2px, 0) rotate(0.28deg); }
-  60% { transform: translate3d(-1.3px, 0.7px, 0) rotate(-0.2deg); }
-  72% { transform: translate3d(1.1px, -1.1px, 0) rotate(0.25deg); }
-  84% { transform: translate3d(-1px, 1.2px, 0) rotate(-0.3deg); }
-}
-
-@keyframes echoCaretBlink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -194,110 +155,9 @@ input[type="number"]::-webkit-outer-spin-button {
     @apply rounded-2xl border border-[var(--border)] bg-[var(--paper)] text-center text-sm font-bold leading-6 text-[var(--ink-soft)] shadow-sm;
   }
 
-  .echo-overlay-backdrop {
-    position: absolute;
-    inset: 0;
-    z-index: 70;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 20px;
-    background: rgba(18, 18, 20, 0.38);
-    backdrop-filter: blur(2px);
-  }
-
-  .echo-overlay-panel {
-    width: 100%;
-    max-width: 360px;
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 28px;
-    background: rgba(16, 18, 24, 0.92);
-    color: white;
-    box-shadow: 0 24px 60px rgba(10, 10, 16, 0.45);
-  }
-
-  .echo-overlay-label {
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 0.32em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .echo-overlay-skip {
-    padding: 4px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.65);
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-  }
-
-  .echo-overlay-skip:hover {
-    border-color: rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.05);
-    color: white;
-  }
-
-  .echo-overlay-skip:active {
-    transform: scale(0.95);
-  }
-
-  .echo-line {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1.5;
-    letter-spacing: 0.04em;
-    font-family: var(--font);
-  }
-
-  .echo-caret {
-    display: inline-block;
-    width: 0.5ch;
-    height: 1em;
-    margin-left: 2px;
-    vertical-align: -0.18em;
-    background: rgba(255, 255, 255, 0.8);
-    animation: echoCaretBlink 0.9s steps(1, end) infinite;
-  }
-
-  .echo-flicker {
-    animation: echoFlicker 0.16s linear infinite;
-  }
-
-  .echo-shake-light {
-    animation: echoShakeLight 0.26s linear infinite;
-    transform-origin: center;
-  }
-
-  .echo-shake-medium {
-    animation: echoShakeMedium 0.18s linear infinite;
-    transform-origin: center;
-  }
-
-  .echo-shake-violent {
-    animation: echoShakeViolent 0.12s linear infinite;
-    transform-origin: center;
-  }
 }
 
 /* Auth Screens */
 .auth-input {
   @apply w-full rounded-2xl border border-[var(--border)] bg-gray-50/50 px-5 py-4 text-sm font-bold text-[var(--ink)] transition-all focus:bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .echo-flicker,
-  .echo-shake-light,
-  .echo-shake-medium,
-  .echo-shake-violent,
-  .echo-caret {
-    animation: none !important;
-  }
 }

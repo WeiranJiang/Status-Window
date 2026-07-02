@@ -121,28 +121,6 @@ create table if not exists public.study_challenges (
   constraint study_challenges_user_subject_unique unique (user_id, subject_id)
 );
 
-create table if not exists public.echo_easter_egg_state (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  has_seen_initial_echo boolean not null default false,
-  initial_echo_branch text,
-  initial_echo_seen_at timestamptz,
-  initial_echo_completed boolean not null default false,
-  eligible_for_10s_followup boolean not null default false,
-  followup_window_started_at timestamptz,
-  studied_10s_after_echo boolean not null default false,
-  studied_10s_after_echo_at timestamptz,
-  got_non_normal_branch boolean not null default false,
-  got_normal_40_branch boolean not null default false,
-  name_prompt_shown boolean not null default false,
-  name_prompt_attempt_count integer not null default 0,
-  submitted_name text,
-  name_was_correct boolean,
-  level_10_echo_pending boolean not null default false,
-  level_10_echo_seen boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 create index if not exists subjects_user_id_idx on public.subjects(user_id);
 create index if not exists study_sessions_user_id_idx on public.study_sessions(user_id);
 create index if not exists study_sessions_start_time_idx on public.study_sessions(start_time desc);
@@ -150,7 +128,6 @@ create index if not exists study_sessions_subject_id_idx on public.study_session
 create index if not exists user_settings_user_id_idx on public.user_settings(user_id);
 create index if not exists study_challenges_user_id_idx on public.study_challenges(user_id);
 create index if not exists study_challenges_subject_id_idx on public.study_challenges(subject_id);
-create index if not exists echo_easter_egg_state_updated_at_idx on public.echo_easter_egg_state(updated_at desc);
 ```
 
 ## SQL: Friends schema (optional – enables the Friends tab)
@@ -301,7 +278,6 @@ alter table public.subjects enable row level security;
 alter table public.study_sessions enable row level security;
 alter table public.user_settings enable row level security;
 alter table public.study_challenges enable row level security;
-alter table public.echo_easter_egg_state enable row level security;
 ```
 
 ## SQL: policies
@@ -337,13 +313,6 @@ with check (user_id = auth.uid());
 
 create policy "study_challenges own rows"
 on public.study_challenges
-for all
-to authenticated
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
-
-create policy "echo_easter_egg_state own rows"
-on public.echo_easter_egg_state
 for all
 to authenticated
 using (user_id = auth.uid())

@@ -75,26 +75,32 @@ function calculateLongestCheckInStreak(sessions: StudySession[], timeZone: strin
 // ── Mini weekly bar chart (pure SVG, no recharts) ─────────────────────────────
 
 function WeeklyBars({ days }: { days: { label: string; hours: number }[] }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const maxH = Math.max(0.01, ...days.map((d) => d.hours));
   const maxScale = Math.max(1, Math.ceil(maxH));
   const tickValues = [maxScale, maxScale * (2 / 3), maxScale * (1 / 3), 0];
+  const topPad = 18;
   const axisW = 24;
   const barW = 22;
   const gap = 8;
   const chartH = 56;
   const barsW = days.length * (barW + gap) - gap;
   const totalW = axisW + 8 + barsW;
+  const totalH = topPad + chartH + 22;
+  const formatHoverHours = (hours: number) => (hours === 0 ? "0h" : `${hours.toFixed(hours >= 10 ? 0 : 1)}h`);
+  const activeDay = activeIndex === null ? null : days[activeIndex];
+  const activeX = activeIndex === null ? null : axisW + 8 + activeIndex * (barW + gap);
 
   return (
     <svg
       width={totalW}
-      height={chartH + 22}
-      viewBox={`0 0 ${totalW} ${chartH + 22}`}
+      height={totalH}
+      viewBox={`0 0 ${totalW} ${totalH}`}
       aria-label="Weekly study hours bar chart"
       className="mx-auto"
     >
       {tickValues.map((tick) => {
-        const y = chartH - (tick / maxScale) * chartH;
+        const y = topPad + chartH - (tick / maxScale) * chartH;
         return (
           <g key={tick}>
             <line
@@ -112,7 +118,7 @@ function WeeklyBars({ days }: { days: { label: string; hours: number }[] }) {
               textAnchor="end"
               fontSize={6.5}
               fontWeight={800}
-              fontFamily="inherit"
+              fontFamily="var(--font-display)"
               fill="var(--muted)"
             >
               {tick === 0 ? "0h" : `${Number(tick.toFixed(1))}h`}
@@ -123,9 +129,13 @@ function WeeklyBars({ days }: { days: { label: string; hours: number }[] }) {
       {days.map((day, i) => {
         const barH = day.hours === 0 ? 0 : Math.max(2, (day.hours / maxScale) * chartH);
         const x = axisW + 8 + i * (barW + gap);
-        const y = chartH - barH;
+        const y = topPad + chartH - barH;
         return (
-          <g key={i}>
+          <g
+            key={i}
+            onMouseEnter={() => setActiveIndex(i)}
+            onMouseLeave={() => setActiveIndex((current) => (current === i ? null : current))}
+          >
             <rect
               x={x}
               y={y}
@@ -133,15 +143,23 @@ function WeeklyBars({ days }: { days: { label: string; hours: number }[] }) {
               height={barH}
               rx={4}
               fill="var(--sky)"
-              opacity={day.hours === 0 ? 0.18 : 0.82}
+              opacity={day.hours === 0 ? 0.18 : activeIndex === i ? 1 : 0.82}
+            />
+            <rect
+              x={x - 2}
+              y={topPad}
+              width={barW + 4}
+              height={chartH}
+              rx={6}
+              fill="transparent"
             />
             <text
               x={x + barW / 2}
-              y={chartH + 15}
+              y={topPad + chartH + 15}
               textAnchor="middle"
               fontSize={7.5}
               fontWeight={800}
-              fontFamily="inherit"
+              fontFamily="var(--font-display)"
               fill="var(--muted)"
               letterSpacing="0.04em"
               style={{ textTransform: "uppercase" }}
@@ -151,6 +169,31 @@ function WeeklyBars({ days }: { days: { label: string; hours: number }[] }) {
           </g>
         );
       })}
+      {activeDay && activeX !== null ? (
+        <g pointerEvents="none">
+          <rect
+            x={activeX - 9}
+            y={1}
+            width={barW + 18}
+            height={14}
+            rx={7}
+            fill="var(--paper)"
+            stroke="var(--border)"
+          />
+          <text
+            x={activeX + barW / 2}
+            y={10.5}
+            textAnchor="middle"
+            fontSize={7.5}
+            fontWeight={800}
+            fontFamily="var(--font-display)"
+            fill="var(--ink)"
+            letterSpacing="0.04em"
+          >
+            {formatHoverHours(activeDay.hours)}
+          </text>
+        </g>
+      ) : null}
     </svg>
   );
 }
