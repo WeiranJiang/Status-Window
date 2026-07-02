@@ -37,7 +37,7 @@ export function AuthScreen({
         </h1>
         {!isSignup ? (
           <p className="mt-2 text-sm font-bold uppercase tracking-wider text-[var(--muted)]">
-            Return to your study control room
+            Return to your study window!
           </p>
         ) : null}
       </div>

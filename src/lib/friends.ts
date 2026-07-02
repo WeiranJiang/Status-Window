@@ -1,4 +1,6 @@
 import { supabase } from "./supabaseClient";
+import { toDateKeyInTimeZone } from "./timezones";
+import { isUuid } from "./validation";
 
 export type FriendRequestStatus = "pending" | "accepted" | "declined";
 
@@ -19,11 +21,7 @@ export interface FriendProfile {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const todayUtcStart = () => {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  return d.toISOString();
-};
+const recentSessionsCutoff = () => new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
 const formatFriendName = (displayName: string | null | undefined) => {
   const trimmed = displayName?.trim();
@@ -34,6 +32,10 @@ const formatFriendName = (displayName: string | null | undefined) => {
 
 /** Send a friend request from the current user to another user by their ID. */
 export const sendFriendRequest = async (fromUserId: string, toUserId: string): Promise<void> => {
+  if (!isUuid(fromUserId) || !isUuid(toUserId)) {
+    throw new Error("Friend IDs must be valid user IDs.");
+  }
+
   if (fromUserId === toUserId) {
     throw new Error("You can't add yourself.");
   }
@@ -196,7 +198,10 @@ export const loadOutgoingRequests = async (userId: string): Promise<OutgoingRequ
 };
 
 /** Load accepted friends with today's study hours and online status. */
-export const loadFriends = async (userId: string): Promise<{ list: FriendProfile[]; requestId: (friendId: string) => string }> => {
+export const loadFriends = async (
+  userId: string,
+  timeZone: string | null = null,
+): Promise<{ list: FriendProfile[]; requestId: (friendId: string) => string }> => {
   // Step 1: accepted friendships
   const { data: reqs, error: reqErr } = await supabase
     .from("friend_requests")
@@ -231,17 +236,20 @@ export const loadFriends = async (userId: string): Promise<{ list: FriendProfile
   });
 
   // Step 3: today's study seconds per friend
+  const todayKey = toDateKeyInTimeZone(new Date(), timeZone);
   const { data: sessions, error: sessErr } = await supabase
     .from("study_sessions")
-    .select("user_id, duration_seconds")
+    .select("user_id, start_time, duration_seconds")
     .in("user_id", friendIds)
-    .gte("start_time", todayUtcStart());
+    .gte("start_time", recentSessionsCutoff());
 
   if (sessErr) throw new Error(sessErr.message);
   const secondsMap: Record<string, number> = {};
-  ((sessions as Array<{ user_id: string; duration_seconds: number }>) ?? []).forEach((s) => {
-    secondsMap[s.user_id] = (secondsMap[s.user_id] ?? 0) + s.duration_seconds;
-  });
+  ((sessions as Array<{ user_id: string; start_time: string; duration_seconds: number }>) ?? [])
+    .filter((session) => toDateKeyInTimeZone(session.start_time, timeZone) === todayKey)
+    .forEach((session) => {
+      secondsMap[session.user_id] = (secondsMap[session.user_id] ?? 0) + session.duration_seconds;
+    });
 
   // Step 4: online status (active timer visible from background timer_state key)
   // We store per-user online status in a lightweight presence table.

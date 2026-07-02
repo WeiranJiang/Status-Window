@@ -1,6 +1,6 @@
 # Status Window Privacy Policy
 
-Last updated: June 24, 2026
+Last updated: June 29, 2026
 
 Status Window is a study and focus tracking Chrome extension. This policy describes what information the extension stores, why it stores it, and how that information is used.
 
@@ -31,6 +31,7 @@ Status Window does not sell personal information and does not use collected data
 
 - Study and account data are stored in the Supabase project configured for the extension.
 - Some temporary operational data is stored locally in Chrome extension storage so timers and notifications continue working while the popup is closed.
+- Authentication session material is kept in session-scoped extension storage so it is cleared when the browser session ends instead of being left in persistent page-local storage.
 
 ## Sharing
 

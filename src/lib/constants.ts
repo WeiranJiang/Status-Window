@@ -88,6 +88,7 @@ export const COLOR_SCHEMES: ColorScheme[] = [
 export const DEFAULT_SETTINGS: Omit<UserSettings, "id" | "user_id" | "created_at"> = {
   theme: "light",
   color_scheme: "warm-cream",
+  time_zone: null,
   button_sounds_enabled: true,
   tab_sounds_enabled: true,
   timer_sound_enabled: true,

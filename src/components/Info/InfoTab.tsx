@@ -16,7 +16,7 @@ export function InfoTab() {
       <Section title="Health (HP)">
         <Row label="+1 HP" detail="Study ≥ 1 hour on a given day." />
         <Row label="−1 HP" detail="Study < 1 hour (or skip) on a given day." />
-        <Row label="Challenges" detail="Challenge HP only drops after a missed day fully ends in your local time zone, not while today is still in progress." />
+        <Row label="Challenges" detail="Challenge HP only drops after a missed day fully ends in your selected time zone, not while today is still in progress." />
         <Row label="Goal" detail="Keep positive HP: it tracks your daily consistency from day one." />
         <Row label="Danger zone" detail="HP goes red when negative." />
       </Section>
@@ -30,13 +30,13 @@ export function InfoTab() {
         <Row label="History" detail="Every saved session is listed with subject and duration." />
         <Row label="Radar" detail="Subject breakdown across up to 4 topics." />
         <Row label="Weekly" detail="Bar chart of study hours over the past 7 days." />
-        <Row label="Challenges" detail="Daily challenge resets and deadlines follow your local time zone." />
+        <Row label="Challenges" detail="Daily challenge resets and deadlines follow your selected time zone." />
       </Section>
 
       <Section title="Friends">
         <Row label="Add" detail="Copy your User ID and share it; paste a friend's ID to invite." />
         <Row label="Online" detail="Green dot = they have a timer running right now" />
-        <Row label="Today" detail="Hours each friend has studied since midnight (UTC)." />
+        <Row label="Today" detail="Hours each friend has studied since midnight in your selected time zone." />
       </Section>
 
       <Section title="Subjects">

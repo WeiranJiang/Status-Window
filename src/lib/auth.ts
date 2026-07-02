@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase, supabaseAuthCallbackUrl } from "./supabaseClient";
 import { getAuthRedirectUrl, isChromeExtension } from "./authRedirect";
 
 export async function signInWithGoogle() {
@@ -40,7 +40,7 @@ export async function signInWithGoogle() {
           if (lastError.message?.includes("Authorization page could not be loaded")) {
             reject(
               new Error(
-                `Google sign-in could not open its authorization page. In Supabase, add ${redirectTo} and ${redirectTo}** to Authentication -> URL Configuration -> Redirect URLs. In Google Cloud, keep the authorized redirect URI set to https://bbqkxxcuufbcegdqzony.supabase.co/auth/v1/callback.`,
+                `Google sign-in could not open its authorization page. In Supabase, add ${redirectTo} and ${redirectTo}** to Authentication -> URL Configuration -> Redirect URLs. In Google Cloud, keep the authorized redirect URI set to ${supabaseAuthCallbackUrl}.`,
               ),
             );
             return;

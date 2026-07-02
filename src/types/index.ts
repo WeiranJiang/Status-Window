@@ -36,6 +36,7 @@ export interface UserSettings {
   user_id: string;
   theme: ThemeMode;
   color_scheme: string | null;
+  time_zone: string | null;
   button_sounds_enabled: boolean;
   tab_sounds_enabled: boolean;
   timer_sound_enabled: boolean;
@@ -71,6 +72,8 @@ export interface TimerState {
   accumulatedMs: number;
   targetDurationMs: number | null;
   paused: boolean;
+  completedAtMs: number | null;
+  savedAtCompletion: boolean;
   userId: string | null;
   authAccessToken: string | null;
   authRefreshToken: string | null;
@@ -143,4 +146,10 @@ export interface ServiceWorkerResponse<T = undefined> {
 export interface TimerStateResponse {
   timer: TimerDisplayState;
   notice: TimerCompletionNotice | null;
+}
+
+export interface TimerStopResponse {
+  durationSeconds: number;
+  draft: SessionDraft;
+  savedInBackground: boolean;
 }

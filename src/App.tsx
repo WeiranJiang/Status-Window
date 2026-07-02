@@ -12,14 +12,21 @@ import { acknowledgeTimerNotice, getTimerState, hasChromeRuntime, pauseTimer, re
 import { calculateChallengePenalty, deleteChallenge, loadChallenges, setChallengePaused, upsertChallenge } from "./lib/challenges";
 import { signInWithGoogle } from "./lib/auth";
 import { COLOR_SCHEMES, DEFAULT_SETTINGS, MINIMUM_CONFIRM_SAVE_SECONDS } from "./lib/constants";
+import { useEchoEasterEgg } from "./hooks/useEchoEasterEgg";
 import { playSound } from "./lib/sounds";
+import { getStorageItem, removeStorageItem, removeStorageItemsWithPrefix, setStorageItem } from "./lib/storage";
+import { getStoredTimeZonePreference, setStoredTimeZonePreference } from "./lib/timezones";
 import {
   archiveSubject,
   addSubject,
+  deleteCurrentUserAccount,
+  deleteSubject,
   ensureInitialUserData,
   loadCoreDashboardData,
   loadStatsSessions,
   renameSubject,
+  reduceStudySessionDuration,
+  restoreSubject,
   saveStudySession,
   signInWithEmail,
   signUpWithEmail,
@@ -27,6 +34,7 @@ import {
   updateUserSettings,
 } from "./lib/setup";
 import { calculateHP, calculateLevel, calculateTotalStudySeconds, formatDurationShort } from "./lib/stats";
+import { applySessionHistoryReduction } from "./lib/sessionHistory";
 import { isChromeExtension } from "./lib/authRedirect";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
 import type { AppTab, AuthMode, DashboardCoreData, StudyChallenge, Subject, StudySession, TimerDisplayState, UserSettings } from "./types";
@@ -40,73 +48,53 @@ const LOADING_THEME: Omit<UserSettings, "id" | "user_id" | "created_at"> = {
   color_scheme: "warm-cream",
 };
 
-function readCoreCache(userId: string): DashboardCoreData | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
+async function readSessionCache<T>(key: string): Promise<T | null> {
   try {
-    const cached = window.localStorage.getItem(`${CORE_CACHE_KEY_PREFIX}${userId}`);
-    return cached ? (JSON.parse(cached) as DashboardCoreData) : null;
+    const cached = await getStorageItem(key, "session");
+    return cached ? (JSON.parse(cached) as T) : null;
   } catch {
     return null;
   }
 }
 
-function writeCoreCache(userId: string, data: DashboardCoreData) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
+async function writeSessionCache(key: string, value: unknown) {
   try {
-    window.localStorage.setItem(`${CORE_CACHE_KEY_PREFIX}${userId}`, JSON.stringify(data));
+    await setStorageItem(key, JSON.stringify(value), "session");
   } catch {
     // Ignore cache write failures and keep the live UI responsive.
   }
 }
 
-function readSessionsCache(userId: string): StudySession[] | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const cached = window.localStorage.getItem(`${SESSIONS_CACHE_KEY_PREFIX}${userId}`);
-    return cached ? (JSON.parse(cached) as StudySession[]) : null;
-  } catch {
-    return null;
-  }
+async function readCoreCache(userId: string) {
+  return readSessionCache<DashboardCoreData>(`${CORE_CACHE_KEY_PREFIX}${userId}`);
 }
 
-function writeSessionsCache(userId: string, sessions: StudySession[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(`${SESSIONS_CACHE_KEY_PREFIX}${userId}`, JSON.stringify(sessions));
-  } catch {
-    // Ignore cache write failures and keep the live UI responsive.
-  }
+async function writeCoreCache(userId: string, data: DashboardCoreData) {
+  await writeSessionCache(`${CORE_CACHE_KEY_PREFIX}${userId}`, data);
 }
 
-function clearCoreCache(userId?: string | null) {
-  if (typeof window === "undefined") {
-    return;
-  }
+async function readSessionsCache(userId: string) {
+  return readSessionCache<StudySession[]>(`${SESSIONS_CACHE_KEY_PREFIX}${userId}`);
+}
 
+async function writeSessionsCache(userId: string, sessions: StudySession[]) {
+  await writeSessionCache(`${SESSIONS_CACHE_KEY_PREFIX}${userId}`, sessions);
+}
+
+async function clearDashboardCaches(userId?: string | null) {
   try {
     if (userId) {
-      window.localStorage.removeItem(`${CORE_CACHE_KEY_PREFIX}${userId}`);
+      await Promise.all([
+        removeStorageItem(`${CORE_CACHE_KEY_PREFIX}${userId}`, "session"),
+        removeStorageItem(`${SESSIONS_CACHE_KEY_PREFIX}${userId}`, "session"),
+      ]);
       return;
     }
 
-    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-      const key = window.localStorage.key(index);
-      if (key?.startsWith(CORE_CACHE_KEY_PREFIX)) {
-        window.localStorage.removeItem(key);
-      }
-    }
+    await Promise.all([
+      removeStorageItemsWithPrefix(CORE_CACHE_KEY_PREFIX, "session"),
+      removeStorageItemsWithPrefix(SESSIONS_CACHE_KEY_PREFIX, "session"),
+    ]);
   } catch {
     // Ignore cache clear failures.
   }
@@ -192,6 +180,7 @@ export default function App() {
   const [timerState, setTimerState] = useState<TimerDisplayState | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [radarSubjectIds, setRadarSubjectIds] = useState<string[]>([]);
+  const [pendingSignupEcho, setPendingSignupEcho] = useState(false);
   const processedNoticeId = useRef<string | null>(null);
   const currentUserRef = useRef<User | null>(null);
   const coreDataRef = useRef<DashboardCoreData | null>(null);
@@ -229,6 +218,13 @@ export default function App() {
       if (active) {
         setChallenges(nextChallenges);
       }
+    }).catch((error) => {
+      if (!active) {
+        return;
+      }
+
+      console.error("Status Window challenge load failed:", error);
+      setChallenges([]);
     });
 
     return () => {
@@ -247,6 +243,21 @@ export default function App() {
     () => COLOR_SCHEMES.find((scheme) => scheme.id === settings.color_scheme) ?? COLOR_SCHEMES[0],
     [settings.color_scheme],
   );
+  const currentUserLevel = useMemo(
+    () => (sessions ? calculateLevel(calculateTotalStudySeconds(sessions)) : 0),
+    [sessions],
+  );
+
+  const {
+    overlay: echoOverlay,
+    maybeTriggerEchoEasterEgg: maybeStartEchoEasterEgg,
+  } = useEchoEasterEgg({
+    userId: currentUser?.id ?? null,
+    userLevel: currentUserLevel,
+    timerActive: Boolean(timerState?.active),
+    sessions,
+    sessionsLoaded: sessions !== null,
+  });
 
   const pushToast = useCallback((toast: Omit<ToastItem, "id">) => {
     const nextToast = { id: crypto.randomUUID(), tone: "neutral" as const, ...toast };
@@ -261,6 +272,20 @@ export default function App() {
       await globalThis.chrome.storage.local.set({ [SETTINGS_CACHE_KEY]: nextSettings });
     }
   }, []);
+
+  const withStoredTimeZone = useCallback(
+    async (userId: string, data: DashboardCoreData): Promise<DashboardCoreData> => {
+      const timeZone = await getStoredTimeZonePreference(userId);
+      return {
+        ...data,
+        settings: {
+          ...data.settings,
+          time_zone: timeZone,
+        },
+      };
+    },
+    [],
+  );
 
   const ensureUserInitialized = useCallback(async (user: User) => {
     if (initializedUserIdsRef.current.has(user.id)) {
@@ -291,7 +316,7 @@ export default function App() {
             return;
           }
 
-          writeSessionsCache(user.id, nextSessions);
+          void writeSessionsCache(user.id, nextSessions);
           startTransition(() => {
             setSessions(nextSessions);
           });
@@ -330,7 +355,7 @@ export default function App() {
       const loadPromise = (async () => {
         try {
           await ensureUserInitialized(user);
-          const nextCoreData = await loadCoreDashboardData(user.id);
+          const nextCoreData = await withStoredTimeZone(user.id, await loadCoreDashboardData(user.id));
 
           if (currentUserRef.current?.id !== user.id) {
             return;
@@ -345,7 +370,7 @@ export default function App() {
             );
           });
 
-          writeCoreCache(user.id, nextCoreData);
+          void writeCoreCache(user.id, nextCoreData);
           await syncChromeSettingsCache(nextCoreData.settings);
 
           // Keep the header metrics fresh without blocking the initial popup render.
@@ -376,7 +401,7 @@ export default function App() {
 
       return coreLoadPromiseRef.current;
     },
-    [ensureUserInitialized, loadStatsData, syncChromeSettingsCache],
+    [ensureUserInitialized, loadStatsData, syncChromeSettingsCache, withStoredTimeZone],
   );
 
   useEffect(() => {
@@ -388,6 +413,15 @@ export default function App() {
       // The error is already stored in component state for the UI.
     });
   }, [coreData, coreError, coreLoading, currentUser, loadCoreData]);
+
+  useEffect(() => {
+    if (!pendingSignupEcho || !currentUser || !coreData || authLoading) {
+      return;
+    }
+
+    setPendingSignupEcho(false);
+    void maybeStartEchoEasterEgg();
+  }, [authLoading, coreData, currentUser, maybeStartEchoEasterEgg, pendingSignupEcho]);
 
   const syncTimer = useCallback(async () => {
     if (!hasChromeRuntime) {
@@ -425,9 +459,6 @@ export default function App() {
 
       await acknowledgeTimerNotice(notice.id);
 
-      if (notice.saved && settings.timer_sound_enabled) {
-        await playSound("completion", settings);
-      }
     }
   }, [loadStatsData, pushToast, settings]);
 
@@ -475,7 +506,7 @@ export default function App() {
       setAuthLoading(false);
 
       if (!nextSession?.user) {
-        clearCoreCache(previousUserId);
+        void clearDashboardCaches(previousUserId);
         setCoreData(null);
         setSessions(null);
         setCoreError(null);
@@ -488,7 +519,7 @@ export default function App() {
       }
 
       if (previousUserId && previousUserId !== nextSession.user.id) {
-        clearCoreCache(previousUserId);
+        void clearDashboardCaches(previousUserId);
         setCoreData(null);
         setSessions(null);
         setCoreError(null);
@@ -498,22 +529,40 @@ export default function App() {
         processedNoticeId.current = null;
       }
 
-      const cachedCoreData = readCoreCache(nextSession.user.id);
-      if (cachedCoreData) {
-        setCoreData(cachedCoreData);
-        coreDataRef.current = cachedCoreData;
-        setRadarSubjectIds((current) =>
-          current.length > 0
-            ? current.filter((subjectId) => cachedCoreData.subjects.some((subject) => subject.id === subjectId && subject.is_active))
-            : cachedCoreData.subjects.filter((subject) => subject.is_active).slice(0, 3).map((subject) => subject.id),
-        );
-      }
+      void Promise.all([
+        readCoreCache(nextSession.user.id),
+        readSessionsCache(nextSession.user.id),
+        getStoredTimeZonePreference(nextSession.user.id),
+      ]).then(([cachedCoreData, cachedSessions, storedTimeZone]) => {
+          if (!active || currentUserRef.current?.id !== nextSession.user.id) {
+            return;
+          }
 
-      const cachedSessions = readSessionsCache(nextSession.user.id);
-      if (cachedSessions) {
-        setSessions(cachedSessions);
-        sessionsRef.current = cachedSessions;
-      }
+          if (cachedCoreData) {
+            const nextCachedCoreData = {
+              ...cachedCoreData,
+              settings: {
+                ...cachedCoreData.settings,
+                time_zone: storedTimeZone,
+              },
+            };
+            setCoreData(nextCachedCoreData);
+            coreDataRef.current = nextCachedCoreData;
+            setRadarSubjectIds((current) =>
+              current.length > 0
+                ? current.filter((subjectId) =>
+                    nextCachedCoreData.subjects.some((subject) => subject.id === subjectId && subject.is_active),
+                  )
+                : nextCachedCoreData.subjects.filter((subject) => subject.is_active).slice(0, 3).map((subject) => subject.id),
+            );
+          }
+
+          if (cachedSessions) {
+            setSessions(cachedSessions);
+            sessionsRef.current = cachedSessions;
+          }
+        },
+      );
 
       void loadCoreData(nextSession.user).catch(() => {
         // The error is already stored in component state for the UI.
@@ -566,15 +615,34 @@ export default function App() {
         return;
       }
 
-    const nextSettings = await updateUserSettings(user.id, updates);
-      setCoreData((current) => (current ? { ...current, settings: nextSettings } : current));
+      const { time_zone, ...remoteUpdates } = updates;
+      const remoteSettings =
+        Object.keys(remoteUpdates).length > 0 ? await updateUserSettings(user.id, remoteUpdates) : null;
+      const storedTimeZone =
+        time_zone !== undefined
+          ? await setStoredTimeZonePreference(user.id, time_zone)
+          : coreDataRef.current?.settings.time_zone ?? null;
+      const nextSettings = {
+        ...(remoteSettings ?? coreDataRef.current?.settings ?? settings),
+        time_zone: storedTimeZone,
+      };
+
+      setCoreData((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextCoreData = { ...current, settings: nextSettings };
+        void writeCoreCache(user.id, nextCoreData);
+        return nextCoreData;
+      });
       await syncChromeSettingsCache(nextSettings);
 
       if (updates.floating_mode_enabled !== undefined) {
         await setFloatingMode(Boolean(updates.floating_mode_enabled));
       }
     },
-    [syncChromeSettingsCache],
+    [settings, syncChromeSettingsCache],
   );
 
   const handleTabChange = useCallback(
@@ -615,24 +683,19 @@ export default function App() {
             currentUserRef.current = response.data.session.user;
             setSession(response.data.session);
             setCurrentUser(response.data.session.user);
+            setPendingSignupEcho(true);
             setAuthLoading(true);
             void loadCoreData(response.data.session.user, { force: true }).finally(() => {
               setAuthLoading(false);
             });
           }
 
-          const showEasterEgg = Math.random() < 0.4;
           if (!response.data.session) {
             pushToast({
               tone: "success",
               title: "Account created",
               description:
                 "Check your email to confirm your account if email confirmation is enabled. For extension-only testing, use a real Supabase Site URL or disable email confirmation.",
-            });
-          } else if (showEasterEgg) {
-            pushToast({
-              tone: "neutral",
-              title: "Nice to see you again!",
             });
           }
         } else {
@@ -750,8 +813,26 @@ export default function App() {
 
     const durationSeconds = response.data.durationSeconds;
     const draft = response.data.draft;
+    const savedInBackground = response.data.savedInBackground;
 
     setTimerState(null);
+
+    if (savedInBackground) {
+      if (currentUserRef.current && sessionsRef.current !== null) {
+        try {
+          await loadStatsData(currentUserRef.current, { force: true });
+        } catch {
+          // Keep the current UI if stats refresh fails.
+        }
+      }
+
+      pushToast({
+        tone: "success",
+        title: "Timer closed",
+        description: "Your session was already saved when the timer finished.",
+      });
+      return;
+    }
 
     if (durationSeconds <= 0) {
       pushToast({
@@ -781,7 +862,12 @@ export default function App() {
       title: "Session saved",
       description: `${savedSession.subject?.name ?? "Session"} logged for ${formatDurationShort(savedSession.duration_seconds)}.`,
     });
-  }, [pushToast, settings]);
+  }, [loadStatsData, pushToast, settings]);
+
+  const handleOpenTimer = useCallback(async () => {
+    await playSound("button", settings);
+    await persistSettings({ floating_mode_enabled: true });
+  }, [persistSettings, settings]);
 
   const withTaskToast = useCallback(
     async (task: () => Promise<void>) => {
@@ -888,17 +974,87 @@ export default function App() {
     setRadarSubjectIds((current) => current.filter((id) => id !== subjectId));
   }, []);
 
-  const handleLogout = useCallback(async () => {
-    clearCoreCache(currentUserRef.current?.id);
-    await supabase.auth.signOut();
+  const handleRestoreSubject = useCallback(async (subjectId: string) => {
+    const subject = await restoreSubject(subjectId);
+    setCoreData((current) =>
+      current
+        ? {
+            ...current,
+            subjects: current.subjects.map((item) => (item.id === subjectId ? subject : item)),
+          }
+        : current,
+    );
+  }, []);
+
+  const handleDeleteSubject = useCallback(async (subjectId: string) => {
+    await deleteSubject(subjectId);
+    setCoreData((current) =>
+      current
+        ? {
+            ...current,
+            subjects: current.subjects.filter((item) => item.id !== subjectId),
+          }
+        : current,
+    );
+    setSessions((current) =>
+      current ? current.filter((session) => session.subject_id !== subjectId) : current,
+    );
+    setChallenges((current) =>
+      current.filter((challenge) => challenge.subject_id !== subjectId),
+    );
+    setRadarSubjectIds((current) => current.filter((id) => id !== subjectId));
+  }, []);
+
+  const resetSignedInState = useCallback(async (userId?: string | null) => {
+    await clearDashboardCaches(userId);
+    setPendingSignupEcho(false);
+    setSession(null);
+    setCurrentUser(null);
     setCoreData(null);
     setSessions(null);
     setChallenges([]);
     setCoreError(null);
     setTimerState(null);
     setStatsError(null);
+    setCoreLoading(false);
+    setRadarSubjectIds([]);
+    currentUserRef.current = null;
+    coreDataRef.current = null;
+    sessionsRef.current = null;
     processedNoticeId.current = null;
+    initializedUserIdsRef.current.clear();
+    lastAuthSessionKeyRef.current = "signed-out";
   }, []);
+
+  const handleLogout = useCallback(async () => {
+    const userId = currentUserRef.current?.id;
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) {
+      throw error;
+    }
+    await resetSignedInState(userId);
+  }, [resetSignedInState]);
+
+  const handleDeleteAccount = useCallback(async () => {
+    const userId = currentUserRef.current?.id;
+    if (!userId) {
+      return;
+    }
+
+    await deleteCurrentUserAccount();
+
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) {
+      console.warn("Status Window local sign-out after account deletion failed:", error);
+    }
+
+    await resetSignedInState(userId);
+    pushToast({
+      tone: "success",
+      title: "Account deleted",
+      description: "Your account and saved data were permanently removed.",
+    });
+  }, [pushToast, resetSignedInState]);
 
   const handleSaveChallenge = useCallback(
     async ({
@@ -967,6 +1123,35 @@ export default function App() {
     [pushToast],
   );
 
+  const handleReduceSessionTime = useCallback(
+    async (sessionToUpdate: StudySession, secondsToRemove: number) => {
+      const user = currentUserRef.current;
+      if (!user) {
+        return;
+      }
+
+      const updatedSession = await reduceStudySessionDuration(user.id, sessionToUpdate, secondsToRemove);
+      setSessions((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextSessions = applySessionHistoryReduction(current, sessionToUpdate.id, updatedSession);
+
+        void writeSessionsCache(user.id, nextSessions);
+        return nextSessions;
+      });
+
+      const removedSeconds = Math.min(secondsToRemove, sessionToUpdate.duration_seconds);
+      pushToast({
+        tone: "success",
+        title: updatedSession ? "Study time reduced" : "Session removed",
+        description: `${formatDurationShort(removedSeconds)} removed from ${sessionToUpdate.subject?.name ?? "that session"}.`,
+      });
+    },
+    [pushToast],
+  );
+
   if (!isSupabaseConfigured) {
     return renderInPopupViewport(
       <div className="status-window-shell sw-shell p-6">
@@ -1014,6 +1199,7 @@ export default function App() {
     return renderInPopupViewport(
       <>
         <ToastStack toasts={toasts} />
+        {echoOverlay}
         <AuthScreen
           loading={authBusy}
           mode={authMode}
@@ -1029,15 +1215,18 @@ export default function App() {
   const displayName = coreData?.profile?.display_name || currentUser.email || "John Smith";
   const subjects = coreData?.subjects ?? [];
   const totalStudySeconds = sessions ? calculateTotalStudySeconds(sessions) : 0;
-  const baseHp = sessions ? calculateHP(sessions) : 0;
-  const challengePenalty = sessions ? calculateChallengePenalty(sessions, challenges).totalPenalty : 0;
+  const baseHp = sessions ? calculateHP(sessions, new Date(), settings.time_zone) : 0;
+  const challengePenalty = sessions
+    ? calculateChallengePenalty(sessions, challenges, new Date(), settings.time_zone).totalPenalty
+    : 0;
   const hp = sessions ? baseHp - challengePenalty : null;
-  const level = sessions ? calculateLevel(totalStudySeconds) : null;
+  const level = sessions ? currentUserLevel : null;
   const missingSchema = coreError?.includes("Missing database table") ?? false;
 
   return renderInPopupViewport(
     <>
       <ToastStack toasts={toasts} />
+      {echoOverlay}
       <AppShell
         activeTab={activeTab}
         displayName={displayName}
@@ -1118,6 +1307,7 @@ export default function App() {
               subjects={subjects}
               sessions={sessions}
               challenges={challenges}
+              timeZone={settings.time_zone}
               baseHp={baseHp}
               challengePenalty={challengePenalty}
               radarSubjectIds={radarSubjectIds}
@@ -1125,6 +1315,7 @@ export default function App() {
               onSaveChallenge={handleSaveChallenge}
               onDeleteChallenge={handleDeleteChallenge}
               onToggleChallengePaused={handleToggleChallengePaused}
+              onReduceSessionTime={handleReduceSessionTime}
             />
           </Suspense>
         ) : null}
@@ -1132,6 +1323,7 @@ export default function App() {
         {coreData && activeTab === "friends" ? (
           <FriendsTab
             userId={currentUser.id}
+            timeZone={settings.time_zone}
             onError={(msg) => pushToast({ tone: "error", title: "Friends", description: msg })}
           />
         ) : null}
@@ -1148,9 +1340,14 @@ export default function App() {
                 await persistSettings(updates);
               })
             }
+            onOpenTimer={() => withTaskToast(handleOpenTimer)}
             onAddSubject={(payload) => withTaskToast(() => handleAddSubject(payload))}
             onUpdateSubject={(subjectId, payload) => withTaskToast(() => handleUpdateSubject(subjectId, payload))}
-            onArchiveSubject={(subjectId) => withTaskToast(() => handleArchiveSubject(subjectId))}
+            onArchiveSubject={(subjectId, shouldArchive) =>
+              withTaskToast(() => (shouldArchive ? handleArchiveSubject(subjectId) : handleRestoreSubject(subjectId)))
+            }
+            onDeleteSubject={(subjectId) => withTaskToast(() => handleDeleteSubject(subjectId))}
+            onDeleteAccount={() => withTaskToast(handleDeleteAccount)}
             onSaveDisplayName={(displayNameValue) => withTaskToast(() => handleSaveDisplayName(displayNameValue))}
             onLogout={() => withTaskToast(handleLogout)}
           />

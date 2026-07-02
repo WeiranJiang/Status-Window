@@ -1,4 +1,5 @@
 import type { StudySession, Subject } from "../types";
+import { compareDateKeys, shiftDateKey, toDateKeyInTimeZone } from "./timezones";
 
 export const formatSeconds = (totalSeconds: number) => {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
@@ -19,32 +20,64 @@ export const formatDurationShort = (totalSeconds: number) => {
   return `${minutes}m`;
 };
 
-export const formatSessionDate = (isoString: string) =>
+export const formatSessionDate = (isoString: string, timeZone: string | null = null) =>
   new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
   }).format(new Date(isoString));
 
-export const toLocalDateKey = (isoString: string) => {
-  const date = new Date(isoString);
-  return toLocalDateKeyFromDate(date);
-};
+export const toLocalDateKey = (isoString: string, timeZone: string | null = null) =>
+  toDateKeyInTimeZone(isoString, timeZone);
 
-export const toLocalDateKeyFromDate = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+export const toLocalDateKeyFromDate = (date: Date, timeZone: string | null = null) => toDateKeyInTimeZone(date, timeZone);
 
 export const calculateTotalStudySeconds = (sessions: StudySession[]) =>
   sessions.reduce((sum, session) => sum + session.duration_seconds, 0);
 
+export const getTotalHoursRequiredForLevel = (level: number) => {
+  const safeLevel = Math.max(0, Math.floor(level));
+  if (safeLevel === 0) {
+    return 0;
+  }
+
+  if (safeLevel <= 10) {
+    return safeLevel * 100;
+  }
+
+  return 1000 + (safeLevel - 10) * 1000;
+};
+
 export const calculateLevel = (totalSeconds: number) => {
-  const hours = totalSeconds / 3600;
-  return Math.round(hours / 1000);
+  const hours = Math.max(0, totalSeconds / 3600);
+  let level = 0;
+
+  while (hours >= getTotalHoursRequiredForLevel(level + 1)) {
+    level += 1;
+  }
+
+  return level;
+};
+
+export const getLevelProgress = (totalSeconds: number) => {
+  const hours = Math.max(0, totalSeconds / 3600);
+  const currentLevel = calculateLevel(totalSeconds);
+  const previousThresholdHours = getTotalHoursRequiredForLevel(currentLevel);
+  const nextThresholdHours = getTotalHoursRequiredForLevel(currentLevel + 1);
+  const spanHours = Math.max(nextThresholdHours - previousThresholdHours, 1);
+  const progress = Math.min(Math.max((hours - previousThresholdHours) / spanHours, 0), 1);
+  const hoursToNextLevel = Math.max(nextThresholdHours - hours, 0);
+
+  return {
+    currentLevel,
+    nextLevel: currentLevel + 1,
+    previousThresholdHours,
+    nextThresholdHours,
+    progress,
+    hoursToNextLevel,
+  };
 };
 
 export const calculateHoursBySubject = (sessions: StudySession[], subjects: Subject[]) => {
@@ -67,37 +100,33 @@ export const calculateHoursBySubject = (sessions: StudySession[], subjects: Subj
     .sort((left, right) => right.totalSeconds - left.totalSeconds);
 };
 
-export const calculateHP = (sessions: StudySession[], today = new Date()) => {
+export const calculateHP = (sessions: StudySession[], today = new Date(), timeZone: string | null = null) => {
   if (sessions.length === 0) {
     return 0;
   }
 
-  let earliestStartTime = sessions[0].start_time;
+  let earliestDayKey = toLocalDateKey(sessions[0].start_time, timeZone);
   const sessionsByDay = sessions.reduce((map, session) => {
-    if (session.start_time < earliestStartTime) {
-      earliestStartTime = session.start_time;
+    const key = toLocalDateKey(session.start_time, timeZone);
+    if (compareDateKeys(key, earliestDayKey) < 0) {
+      earliestDayKey = key;
     }
 
-    const key = toLocalDateKey(session.start_time);
     const current = map.get(key) ?? 0;
     map.set(key, current + session.duration_seconds);
     return map;
   }, new Map<string, number>());
-
-  const firstDay = new Date(earliestStartTime);
-  firstDay.setHours(0, 0, 0, 0);
-
-  const endDay = new Date(today);
-  endDay.setHours(0, 0, 0, 0);
+  const endDayKey = toLocalDateKeyFromDate(today, timeZone);
 
   let hp = 0;
-  const cursor = new Date(firstDay);
-
-  while (cursor <= endDay) {
-    const key = toLocalDateKeyFromDate(cursor);
+  for (
+    let cursor = earliestDayKey;
+    compareDateKeys(cursor, endDayKey) <= 0;
+    cursor = shiftDateKey(cursor, 1)
+  ) {
+    const key = cursor;
     const total = sessionsByDay.get(key) ?? 0;
     hp += total >= 3600 ? 1 : -1;
-    cursor.setDate(cursor.getDate() + 1);
   }
 
   return hp;
@@ -121,10 +150,12 @@ export const getTimerSnapshot = (state: {
     state.mode === "timer" && state.targetDurationMs !== null
       ? Math.max(state.targetDurationMs - elapsedMs, 0)
       : null;
+  const completedAtLimit =
+    state.targetDurationMs !== null && elapsedMs >= state.targetDurationMs;
 
   return {
     elapsedMs,
     remainingMs,
-    completed: state.mode === "timer" && remainingMs === 0,
+    completed: state.mode === "timer" ? remainingMs === 0 : completedAtLimit,
   };
 };

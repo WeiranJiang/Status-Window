@@ -190,6 +190,58 @@ export const saveStudySession = async (draft: SessionDraft) => {
   return normalizeStudySession(data as Parameters<typeof normalizeStudySession>[0]);
 };
 
+export const reduceStudySessionDuration = async (
+  userId: string,
+  session: StudySession,
+  secondsToRemove: number,
+) => {
+  const safeSecondsToRemove = Math.max(0, Math.floor(secondsToRemove));
+  if (safeSecondsToRemove <= 0) {
+    throw new Error("Choose a positive amount of time to remove.");
+  }
+
+  if (session.user_id !== userId) {
+    throw new Error("You can only edit your own study sessions.");
+  }
+
+  if (safeSecondsToRemove > session.duration_seconds) {
+    throw new Error("You cannot remove more time than the session currently has.");
+  }
+
+  const nextDurationSeconds = session.duration_seconds - safeSecondsToRemove;
+  if (nextDurationSeconds === 0) {
+    const { error } = await supabase
+      .from("study_sessions")
+      .delete()
+      .eq("id", session.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      throw error;
+    }
+
+    return null;
+  }
+
+  const nextEndTime = new Date(new Date(session.start_time).getTime() + nextDurationSeconds * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("study_sessions")
+    .update({
+      duration_seconds: nextDurationSeconds,
+      end_time: nextEndTime,
+    })
+    .eq("id", session.id)
+    .eq("user_id", userId)
+    .select(SESSION_COLUMNS)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeStudySession(data as Parameters<typeof normalizeStudySession>[0]);
+};
+
 export const updateProfileDisplayName = async (userId: string, displayName: string) => {
   const { data, error } = await supabase
     .from("profiles")
@@ -248,7 +300,64 @@ export const archiveSubject = async (subjectId: string) => {
   return data as Subject;
 };
 
-export const updateUserSettings = async (userId: string, updates: Partial<UserSettings>) => {
+export const restoreSubject = async (subjectId: string) => {
+  const { data, error } = await supabase
+    .from("subjects")
+    .update({ is_active: true })
+    .eq("id", subjectId)
+    .select(SUBJECT_COLUMNS)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Subject;
+};
+
+export const deleteSubject = async (subjectId: string) => {
+  const { error: sessionsError } = await supabase
+    .from("study_sessions")
+    .delete()
+    .eq("subject_id", subjectId);
+
+  if (sessionsError) {
+    throw sessionsError;
+  }
+
+  const { error } = await supabase
+    .from("subjects")
+    .delete()
+    .eq("id", subjectId);
+
+  if (error) {
+    throw error;
+  }
+};
+
+export const deleteCurrentUserAccount = async () => {
+  const { error } = await supabase.rpc("delete_my_account");
+
+  if (!error) {
+    return;
+  }
+
+  if (
+    /delete_my_account/i.test(error.message) &&
+    /(function|schema cache|could not find)/i.test(error.message)
+  ) {
+    throw new Error(
+      "Account deletion is not enabled in Supabase yet. Add the delete_my_account() SQL function from README.md, then try again.",
+    );
+  }
+
+  throw error;
+};
+
+export const updateUserSettings = async (
+  userId: string,
+  updates: Partial<Omit<UserSettings, "id" | "user_id" | "created_at" | "time_zone">>,
+) => {
   const { data, error } = await supabase
     .from("user_settings")
     .update(updates)

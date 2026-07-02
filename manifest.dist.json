@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Status Window",
-  "description": "A cozy study and work tracker with stats, sessions, and Supabase sync.",
+  "description": "A study timer and session tracker with stats and optional cloud sync.",
   "version": "0.1.0",
   "action": {
     "default_title": "Status Window",
@@ -14,8 +14,16 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "permissions": ["storage", "identity", "alarms", "sidePanel", "offscreen"],
-  "host_permissions": ["https://bbqkxxcuufbcegdqzony.supabase.co/*"],
+  "permissions": [
+    "storage",
+    "identity",
+    "alarms",
+    "sidePanel",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://bbqkxxcuufbcegdqzony.supabase.co/*"
+  ],
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",

@@ -38,9 +38,11 @@ function OnlineDot({ online }: { online: boolean }) {
 
 export function FriendsTab({
   userId,
+  timeZone,
   onError,
 }: {
   userId: string;
+  timeZone: string | null;
   onError: (msg: string) => void;
 }) {
   const [inviteInput, setInviteInput] = useState("");
@@ -64,7 +66,7 @@ export function FriendsTab({
       const [incomingData, outgoingData, { list, requestId }] = await Promise.all([
         loadIncomingRequests(userId),
         loadOutgoingRequests(userId),
-        loadFriends(userId),
+        loadFriends(userId, timeZone),
       ]);
       if (!mountedRef.current) return;
       setIncoming(incomingData);
@@ -95,7 +97,7 @@ export function FriendsTab({
     }, 10000);
 
     return () => window.clearInterval(interval);
-  }, [userId]);
+  }, [timeZone, userId]);
 
   const handleSend = async () => {
     const target = inviteInput.trim();
@@ -188,7 +190,7 @@ export function FriendsTab({
             {copied ? <Check className="h-3.5 w-3.5 text-[var(--leaf)]" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
         </div>
-        <p className="mt-1.5 text-[9px] font-bold text-[var(--muted)] uppercase tracking-wide">
+        <p className="sw-display-accent mt-1.5 text-[9px] text-[var(--muted)] uppercase tracking-wide">
           Share this with friends so they can add you
         </p>
       </section>

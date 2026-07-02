@@ -1,8 +1,8 @@
 import type {
-  SessionDraft,
   ServiceWorkerResponse,
   TimerCompletionNotice,
   TimerDisplayState,
+  TimerStopResponse,
   TimerStartPayload,
   TimerStateResponse,
 } from "../types";
@@ -77,7 +77,7 @@ export const resumeTimer = async () =>
   sendRuntimeMessage<ServiceWorkerResponse<TimerDisplayState>>({ type: "timer/resume" });
 
 export const stopTimer = async () =>
-  sendRuntimeMessage<ServiceWorkerResponse<{ durationSeconds: number; draft: SessionDraft }>>({
+  sendRuntimeMessage<ServiceWorkerResponse<TimerStopResponse>>({
     type: "timer/stop",
   });
 

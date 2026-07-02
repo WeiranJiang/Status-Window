@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { Pause, Play, Trash2 } from "lucide-react";
+import { Minus, Pause, Play, Trash2 } from "lucide-react";
 import { calculateChallengePenalty, getChallengeTodayStatus } from "../../lib/challenges";
-import { calculateHP, calculateTotalStudySeconds, formatDurationShort, toLocalDateKey } from "../../lib/stats";
+import { calculateHP, calculateTotalStudySeconds, formatDurationShort, getLevelProgress, toLocalDateKey } from "../../lib/stats";
+import { formatInTimeZone, getStartOfWeekDateKey, shiftDateKey } from "../../lib/timezones";
 import { calculateSubjectHours } from "../../lib/radarStats";
 import type { StudyChallenge, StudySession, Subject } from "../../types";
 import { SvgRadarChart } from "./RadarChart";
@@ -13,6 +14,7 @@ interface StatsTabProps {
   subjects: Subject[];
   sessions: StudySession[];
   challenges: StudyChallenge[];
+  timeZone: string | null;
   baseHp: number;
   challengePenalty: number;
   radarSubjectIds: string[];
@@ -20,6 +22,7 @@ interface StatsTabProps {
   onSaveChallenge: (payload: { subjectId: string; dailyTargetMinutes: number; hpPenalty: number; deadlineDate: string | null }) => Promise<void>;
   onDeleteChallenge: (challengeId: string) => Promise<void>;
   onToggleChallengePaused: (challengeId: string, paused: boolean) => Promise<void>;
+  onReduceSessionTime: (session: StudySession, secondsToRemove: number) => Promise<void>;
 }
 
 const sectionHeadingClassName = "sw-display-accent text-[12px] uppercase tracking-widest text-[var(--muted)]";
@@ -27,28 +30,27 @@ const sectionHeadingClassName = "sw-display-accent text-[12px] uppercase trackin
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Last 7 days: returns [{ dateKey, seconds }] newest→oldest */
-function last7DaysSessions(sessions: StudySession[]): { label: string; hours: number }[] {
+function last7DaysSessions(sessions: StudySession[], timeZone: string | null): { label: string; hours: number }[] {
   const days: { label: string; hours: number }[] = [];
   const today = new Date();
+  const todayKey = toLocalDateKey(today.toISOString(), timeZone);
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const key = toLocalDateKey(d.toISOString());
-    const label = d.toLocaleDateString(undefined, { weekday: "short" });
+    const key = shiftDateKey(todayKey, -i);
+    const label = formatInTimeZone(new Date(`${key}T12:00:00Z`), { weekday: "short" }, "UTC");
     const seconds = sessions
-      .filter((s) => toLocalDateKey(s.start_time) === key)
+      .filter((s) => toLocalDateKey(s.start_time, timeZone) === key)
       .reduce((sum, s) => sum + s.duration_seconds, 0);
     days.push({ label, hours: seconds / 3600 });
   }
   return days;
 }
 
-function calculateLongestCheckInStreak(sessions: StudySession[]) {
+function calculateLongestCheckInStreak(sessions: StudySession[], timeZone: string | null) {
   if (sessions.length === 0) {
     return 0;
   }
 
-  const dayKeys = Array.from(new Set(sessions.map((session) => toLocalDateKey(session.start_time)))).sort();
+  const dayKeys = Array.from(new Set(sessions.map((session) => toLocalDateKey(session.start_time, timeZone)))).sort();
   let longest = 1;
   let current = 1;
 
@@ -68,13 +70,6 @@ function calculateLongestCheckInStreak(sessions: StudySession[]) {
   }
 
   return longest;
-}
-
-function getStartOfWeek(date = new Date()) {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - start.getDay());
-  return start;
 }
 
 // ── Mini weekly bar chart (pure SVG, no recharts) ─────────────────────────────
@@ -203,41 +198,177 @@ function ChallengeRow({
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="text-[10px] font-black uppercase tracking-wide text-[var(--ink)]">{label}</span>
-      <span className="text-right text-[10px] font-bold text-[var(--muted)]">{detail}</span>
+      <span className="sw-display-accent text-[10px] uppercase tracking-wide text-[var(--ink)]">{label}</span>
+      <span className="sw-display-accent text-right text-[10px] text-[var(--muted)]">{detail}</span>
     </div>
   );
 }
 
 // ── Session history item ─────────────────────────────────────────────────────
 
-function SessionItem({ session }: { session: StudySession }) {
-  const dateLabel = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(session.start_time));
+function SessionItem({
+  session,
+  timeZone,
+  onReduceTime,
+}: {
+  session: StudySession;
+  timeZone: string | null;
+  onReduceTime: (secondsToRemove: number) => Promise<void>;
+}) {
+  const dateLabel = formatInTimeZone(
+    new Date(session.start_time),
+    {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
+    timeZone,
+  );
+  const [editing, setEditing] = useState(false);
+  const [removeMinutesInput, setRemoveMinutesInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const maxMinutes = Math.max(1, Math.ceil(session.duration_seconds / 60));
+  const quickAdjustments = [5, 15, 30, 60].filter((minutes) => minutes < maxMinutes);
+
+  const closeEditor = () => {
+    setEditing(false);
+    setRemoveMinutesInput("");
+    setSubmitting(false);
+  };
+
+  const submitReduction = async (requestedMinutes: number) => {
+    const nextMinutes = Math.floor(requestedMinutes);
+    if (!Number.isFinite(nextMinutes) || nextMinutes <= 0) {
+      return;
+    }
+
+    const safeSecondsToRemove = Math.min(nextMinutes * 60, session.duration_seconds);
+    const removesEntireSession = safeSecondsToRemove >= session.duration_seconds;
+    if (removesEntireSession) {
+      const confirmed = window.confirm(
+        `Remove ${session.subject?.name ?? "this session"} from your history entirely?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    try {
+      await onReduceTime(safeSecondsToRemove);
+      closeEditor();
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3">
-      {session.subject && (
-        <span
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ backgroundColor: session.subject.color ?? "var(--sky)" }}
-        />
-      )}
-      <div className="flex flex-1 flex-col">
-        <span className="text-[11px] font-black text-[var(--ink)]">
-          {session.subject?.name ?? "Unknown"}
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3">
+      <div className="flex items-center gap-3">
+        {session.subject && (
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: session.subject.color ?? "var(--sky)" }}
+          />
+        )}
+        <div className="flex flex-1 flex-col">
+          <span className="sw-display-accent text-[11px] text-[var(--ink)]">
+            {session.subject?.name ?? "Unknown"}
+          </span>
+          <span className="sw-display-accent text-[9px] uppercase tracking-wide text-[var(--muted)]">
+            {dateLabel}
+          </span>
+        </div>
+        <span className="sw-display-accent text-[11px] text-[var(--sky-dark)]">
+          {formatDurationShort(session.duration_seconds)}
         </span>
-        <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
-          {dateLabel}
-        </span>
+        <button
+          type="button"
+          aria-label={`Subtract time from ${session.subject?.name ?? "this session"}`}
+          onClick={() => {
+            if (submitting) {
+              return;
+            }
+
+            if (editing) {
+              closeEditor();
+              return;
+            }
+
+            setEditing(true);
+            setRemoveMinutesInput("");
+          }}
+          className="flex shrink-0 items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1.5 text-[9px] font-black uppercase tracking-wide text-red-600 transition-all hover:bg-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+          title={editing ? "Close adjustment controls" : "Subtract time from this session"}
+          disabled={submitting}
+        >
+          <Minus className="h-3.5 w-3.5 shrink-0" />
+          <span>{editing ? "Close" : "Adjust"}</span>
+        </button>
       </div>
-      <span className="text-[11px] font-black text-[var(--sky-dark)]">
-        {formatDurationShort(session.duration_seconds)}
-      </span>
+      {editing ? (
+        <div className="mt-3 rounded-xl bg-[var(--sky-soft)] px-3 py-3">
+          <div className="mb-2 flex flex-wrap gap-2">
+            {quickAdjustments.map((minutes) => (
+              <button
+                key={minutes}
+                type="button"
+                onClick={() => void submitReduction(minutes)}
+                className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-red-600 transition-all hover:bg-red-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={submitting}
+              >
+                -{minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => void submitReduction(maxMinutes)}
+              className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-red-600 transition-all hover:bg-red-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={submitting}
+            >
+              Remove all
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              max={maxMinutes}
+              step="1"
+              inputMode="numeric"
+              value={removeMinutesInput}
+              onChange={(event) => setRemoveMinutesInput(event.target.value)}
+              placeholder={`1-${maxMinutes}`}
+              className="w-24 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-right text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+              aria-label={`Minutes to remove from ${session.subject?.name ?? "session"}`}
+              disabled={submitting}
+            />
+            <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+              Minutes to subtract
+            </span>
+            <button
+              type="button"
+              onClick={() => void submitReduction(Number(removeMinutesInput))}
+              className="rounded-full bg-red-500 px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-white transition-all hover:bg-red-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={submitting}
+            >
+              {submitting ? "Saving..." : "Apply"}
+            </button>
+            <button
+              type="button"
+              onClick={closeEditor}
+              className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-[9px] font-black uppercase tracking-wide text-[var(--muted)] transition-all hover:bg-[var(--paper)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="mt-2 text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+            Max {maxMinutes}m ({formatDurationShort(session.duration_seconds)})
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -248,6 +379,7 @@ export const StatsTab = memo(function StatsTab({
   subjects,
   sessions,
   challenges,
+  timeZone,
   baseHp,
   challengePenalty,
   radarSubjectIds,
@@ -255,13 +387,15 @@ export const StatsTab = memo(function StatsTab({
   onSaveChallenge,
   onDeleteChallenge,
   onToggleChallengePaused,
+  onReduceSessionTime,
 }: StatsTabProps) {
   // ─ Aggregate metrics ─
   const totalSeconds = useMemo(() => calculateTotalStudySeconds(sessions), [sessions]);
   const totalHours = totalSeconds / 3600;
-  const hp = useMemo(() => calculateHP(sessions), [sessions]);
-  const longestCheckInStreak = useMemo(() => calculateLongestCheckInStreak(sessions), [sessions]);
-  const weeklyDays = useMemo(() => last7DaysSessions(sessions), [sessions]);
+  const hp = useMemo(() => calculateHP(sessions, new Date(), timeZone), [sessions, timeZone]);
+  const levelProgress = useMemo(() => getLevelProgress(totalSeconds), [totalSeconds]);
+  const longestCheckInStreak = useMemo(() => calculateLongestCheckInStreak(sessions, timeZone), [sessions, timeZone]);
+  const weeklyDays = useMemo(() => last7DaysSessions(sessions, timeZone), [sessions, timeZone]);
   const [outerRingInput, setOuterRingInput] = useState("");
   const [selectedChallengeSubjectId, setSelectedChallengeSubjectId] = useState("");
   const [dailyTargetInput, setDailyTargetInput] = useState("60");
@@ -296,8 +430,8 @@ export const StatsTab = memo(function StatsTab({
     [challenges],
   );
   const challengeSummary = useMemo(
-    () => calculateChallengePenalty(sessions, challenges),
-    [sessions, challenges],
+    () => calculateChallengePenalty(sessions, challenges, new Date(), timeZone),
+    [sessions, challenges, timeZone],
   );
   const hasEnoughSubjects = activeSubjects.length >= 3;
   const hasEnoughSelected = radarSubjectIds.length >= 3;
@@ -315,13 +449,13 @@ export const StatsTab = memo(function StatsTab({
   // ─ Weekly history (latest 20 this week only) ─
   const weeklyHistorySessions = useMemo(
     () => {
-      const startOfWeek = getStartOfWeek();
+      const startOfWeekKey = getStartOfWeekDateKey(new Date(), timeZone);
       return [...sessions]
-        .filter((session) => new Date(session.start_time) >= startOfWeek)
+        .filter((session) => toLocalDateKey(session.start_time, timeZone) >= startOfWeekKey)
         .sort((a, b) => b.start_time.localeCompare(a.start_time))
         .slice(0, 20);
     },
-    [sessions],
+    [sessions, timeZone],
   );
 
   useEffect(() => {
@@ -352,16 +486,25 @@ export const StatsTab = memo(function StatsTab({
       {/* ── Primary metrics ── */}
       <section className="grid grid-cols-2 gap-3">
         <div className="flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-4 shadow-sm">
-          <span className="sw-display-accent text-[11px] uppercase tracking-widest text-[var(--muted)]">
+          <span className="sw-display-accent text-[13px] uppercase tracking-widest text-[var(--muted)]">
             Focus Hours
           </span>
           <span className="sw-display-accent mt-1 text-3xl tracking-tight text-[var(--ink)]">
             {totalHours.toFixed(1)}
           </span>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--border)]">
+            <div
+              className="h-full rounded-full bg-[var(--sky)] transition-all duration-500"
+              style={{ width: `${Math.max(levelProgress.progress * 100, 4)}%` }}
+            />
+          </div>
+          <span className="sw-display-accent mt-1 text-[9px] text-[var(--muted)]">
+            {levelProgress.hoursToNextLevel.toFixed(levelProgress.hoursToNextLevel >= 10 ? 0 : 1)}h to LVL {levelProgress.nextLevel}
+          </span>
           <span className="mt-0.5 text-[9px] font-bold text-[var(--muted)]">all-time</span>
         </div>
         <div className="flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-4 shadow-sm">
-          <span className="sw-display-accent text-[11px] uppercase tracking-widest text-[var(--muted)]">
+          <span className="sw-display-accent text-[13px] uppercase tracking-widest text-[var(--muted)]">
             Survival HP
           </span>
           <span
@@ -473,14 +616,14 @@ export const StatsTab = memo(function StatsTab({
           <span className={sectionHeadingClassName}>
             Challenges
           </span>
-          <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+          <span className="sw-display-accent text-[9px] uppercase tracking-wide text-[var(--muted)]">
             whole-number HP only
           </span>
         </div>
 
         <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-4 shadow-sm">
           {activeSubjects.length === 0 ? (
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)] opacity-60">
+            <p className="sw-display-accent text-[10px] uppercase tracking-widest text-[var(--muted)] opacity-60">
               Add a subject first to create a challenge.
             </p>
           ) : (
@@ -489,7 +632,7 @@ export const StatsTab = memo(function StatsTab({
                 <select
                   value={selectedChallengeSubjectId}
                   onChange={(event) => setSelectedChallengeSubjectId(event.target.value)}
-                  className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                  className="sw-display-accent rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-xs text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                 >
                   {activeSubjects.map((subject) => (
                     <option key={subject.id} value={subject.id}>
@@ -499,7 +642,7 @@ export const StatsTab = memo(function StatsTab({
                 </select>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+                    <span className="sw-display-accent text-[9px] uppercase tracking-wide text-[var(--muted)]">
                       Daily Minutes
                     </span>
                     <input
@@ -509,11 +652,11 @@ export const StatsTab = memo(function StatsTab({
                       inputMode="numeric"
                       value={dailyTargetInput}
                       onChange={(event) => setDailyTargetInput(event.target.value)}
-                      className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                      className="sw-display-accent rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+                    <span className="sw-display-accent text-[9px] uppercase tracking-wide text-[var(--muted)]">
                       HP Lost
                     </span>
                     <input
@@ -523,19 +666,19 @@ export const StatsTab = memo(function StatsTab({
                       inputMode="numeric"
                       value={hpPenaltyInput}
                       onChange={(event) => setHpPenaltyInput(event.target.value)}
-                      className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                      className="sw-display-accent rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                     />
                   </label>
                 </div>
                 <label className="flex flex-col gap-1">
-                  <span className="text-[9px] font-black uppercase tracking-wide text-[var(--muted)]">
+                  <span className="sw-display-accent text-[9px] uppercase tracking-wide text-[var(--muted)]">
                     Deadline
                   </span>
                   <input
                     type="date"
                     value={deadlineInput}
                     onChange={(event) => setDeadlineInput(event.target.value)}
-                    className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs font-black text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
+                    className="sw-display-accent rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-xs text-[var(--ink)] outline-none transition-all focus:border-[var(--sky)] focus:ring-1 focus:ring-[var(--sky)]"
                   />
                 </label>
               </div>
@@ -557,7 +700,7 @@ export const StatsTab = memo(function StatsTab({
                     deadlineDate: deadlineInput.trim() || null,
                   });
                 }}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--sky)] px-4 text-[10px] font-black uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[var(--sky-dark)] active:scale-95"
+                className="sw-display-accent inline-flex h-10 items-center justify-center rounded-xl bg-[var(--sky)] px-4 text-[10px] uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[var(--sky-dark)] active:scale-95"
               >
                 {challengeBySubjectId.has(selectedChallengeSubjectId) ? "Update challenge" : "Save challenge"}
               </button>
@@ -575,11 +718,15 @@ export const StatsTab = memo(function StatsTab({
               const subject = activeSubjects.find((item) => item.id === challenge.subject_id) ?? subjects.find((item) => item.id === challenge.subject_id);
               const summary = challengeSummary.breakdown.find((item) => item.challengeId === challenge.id);
               const deadlineLabel = challenge.deadline_date
-                ? new Intl.DateTimeFormat(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  }).format(new Date(`${challenge.deadline_date}T12:00:00`))
+                ? formatInTimeZone(
+                    new Date(`${challenge.deadline_date}T12:00:00Z`),
+                    {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                    "UTC",
+                  )
                 : "No deadline";
 
               return (
@@ -598,7 +745,7 @@ export const StatsTab = memo(function StatsTab({
                       {challenge.is_paused ? "Paused" : "Active"} · {deadlineLabel}
                     </span>
                     {(() => {
-                      const todayStatus = getChallengeTodayStatus(sessions, challenge);
+                      const todayStatus = getChallengeTodayStatus(sessions, challenge, new Date(), timeZone);
                       const statusTone = todayStatus.status === "completed"
                         ? {
                             backgroundColor: "var(--sky-soft)",
@@ -637,13 +784,13 @@ export const StatsTab = memo(function StatsTab({
                           style={{ backgroundColor: statusTone.backgroundColor }}
                         >
                           <span
-                            className="text-[9px] font-black uppercase tracking-wide"
+                            className="sw-display-accent text-[9px] uppercase tracking-wide"
                             style={{ color: statusTone.textColor }}
                           >
                             {statusLabel}
                           </span>
                           <span
-                            className="text-[9px] font-bold uppercase tracking-wide"
+                            className="sw-display-accent text-[9px] uppercase tracking-wide"
                             style={{ color: statusTone.detailColor }}
                           >
                             {todayStatus.studiedMinutes}/{todayStatus.targetMinutes} min
@@ -691,7 +838,7 @@ export const StatsTab = memo(function StatsTab({
           <span className={sectionHeadingClassName}>
             History
           </span>
-          <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--muted)]">
+          <span className="sw-display-accent text-[9px] uppercase tracking-wide text-[var(--muted)]">
             resets weekly
           </span>
         </div>
@@ -702,7 +849,12 @@ export const StatsTab = memo(function StatsTab({
         ) : (
           <div className="mt-3 flex flex-col gap-2">
             {weeklyHistorySessions.map((session) => (
-              <SessionItem key={session.id} session={session} />
+              <SessionItem
+                key={session.id}
+                session={session}
+                timeZone={timeZone}
+                onReduceTime={(secondsToRemove) => onReduceSessionTime(session, secondsToRemove)}
+              />
             ))}
           </div>
         )}

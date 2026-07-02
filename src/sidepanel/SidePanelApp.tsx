@@ -72,6 +72,12 @@ export function SidePanelApp() {
                   if (!response.ok || !response.data) {
                     throw new Error(response.error ?? "Unable to stop.");
                   }
+                  if (response.data.savedInBackground) {
+                    setTimer(null);
+                    setMessage("Timer closed. The finished session was already saved.");
+                    return;
+                  }
+
                   if (response.data.durationSeconds > 0) {
                     await saveStudySession(response.data.draft);
                   }
@@ -87,7 +93,7 @@ export function SidePanelApp() {
 
         {timer ? (
           <div className="mt-auto flex items-center justify-center gap-3 pb-2 text-[10px] font-black uppercase tracking-widest text-[var(--muted)]">
-            <span>{timer.paused ? "Paused" : "Active"}</span>
+            <span>{timer.completed ? "Finished" : timer.paused ? "Paused" : "Active"}</span>
             <span className="h-1 w-1 rounded-full bg-[var(--muted)]" />
             <span>{timer.mode === "timer" ? "Timer" : "Stopwatch"}</span>
           </div>

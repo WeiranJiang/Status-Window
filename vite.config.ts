@@ -23,7 +23,6 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       input: {
-        index: resolve(__dirname, "index.html"),
         popup: resolve(__dirname, "popup.html"),
         sidepanel: resolve(__dirname, "sidepanel.html"),
         offscreen: resolve(__dirname, "offscreen.html"),
